@@ -1,7 +1,7 @@
 use std::io::IoSliceMut;
 
 use libc::{c_void, RAX};
-use log::{debug, trace};
+use log::{debug, info, trace};
 use nix::{
     errno::Errno,
     sys::{
@@ -14,20 +14,21 @@ use nix::{
 
 use crate::syscall::SyscallParseError;
 
-use super::SysCallDisc;
+use super::SyscallDisc;
 
-pub(super) fn get_return_value(pid: Pid) -> Result<i64, SyscallParseError> {
-    debug!("Parsing syscall exit...");
-    ptrace::syscall(pid, None)?;
+pub(super) fn wait_for_stop(pid: Pid) -> Result<(), SyscallParseError> {
     match waitpid(pid, None) {
-        // FIXME it's probably good enough if this returns EAX
-        Ok(WaitStatus::Stopped(_, _)) => Ok(ptrace::read_user(pid, (RAX * 8) as *mut c_void)?),
-        Ok(WaitStatus::Exited(_, _)) => Err(SyscallParseError::ProcessExit),
-        _ => panic!(),
+        Ok(WaitStatus::Stopped(_, _)) => Ok(()),
+        Ok(WaitStatus::Exited(_, exit_code)) => {
+            info!("Process exited");
+            Err(SyscallParseError::ProcessExit(exit_code))
+        }
+        Ok(status) => Err(SyscallParseError::UnexpectedWaitStatus(status)),
+        Err(err) => Err(SyscallParseError::WaitPidError(err)),
     }
 }
 
-pub(super) fn read_string_memory(pid: Pid, base: usize, len: usize) -> Result<Vec<u8>, Errno> {
+pub(super) fn read_bytes_memory(pid: Pid, base: usize, len: usize) -> Result<Vec<u8>, Errno> {
     let mut data = vec![0; len];
     process_vm_readv(
         pid,
@@ -37,28 +38,47 @@ pub(super) fn read_string_memory(pid: Pid, base: usize, len: usize) -> Result<Ve
     Ok(data)
 }
 
-pub(super) fn read_cstring(pid: Pid, mut addr: usize) -> Result<Vec<u8>, Errno> {
-    let mut data = vec![];
-    'read: loop {
-        // TODO use process_vm_readv here
-        let word = ptrace::read(pid, addr as *mut c_void)?;
-        for byte in word.to_ne_bytes() {
-            if byte == 0 {
-                break 'read;
-            }
-            data.push(byte);
-            addr += 1;
-        }
-    }
+const MAX_BYTES_CSTRING: usize = 2048 * 1024; // 2 MiB
+const BUFFER_SIZE: usize = 128;
 
+// FIXME does this actually work?
+pub(super) fn read_cstring(pid: Pid, base: usize) -> Result<Vec<u8>, Errno> {
+    let mut data = vec![];
+    let mut buf = [0; BUFFER_SIZE];
+    let mut total_bytes_read = 0usize;
+
+    while data.len() < MAX_BYTES_CSTRING {
+        total_bytes_read += process_vm_readv(
+            pid,
+            &mut [IoSliceMut::new(&mut buf)],
+            &[RemoteIoVec {
+                base: base + total_bytes_read,
+                len: BUFFER_SIZE,
+            }],
+        )?;
+
+        if let Some(index) = buf.iter().position(|num| *num == 0) {
+            data.extend_from_slice(&buf[..index + 1]);
+            break;
+        }
+        data.extend_from_slice(&buf);
+    }
     Ok(data)
+}
+
+pub(super) fn get_return_value(pid: Pid) -> Result<i64, SyscallParseError> {
+    debug!("Parsing syscall exit...");
+    ptrace::syscall(pid, None)?;
+    wait_for_stop(pid)?;
+    trace!("exit regs: {:?}", ptrace::getregs(pid)?);
+    Ok(ptrace::read_user(pid, (RAX * 8) as *mut c_void)?)
 }
 
 pub(super) fn parse_syscall_error(return_value: i64) -> Errno {
     Errno::from_raw(-return_value as i32)
 }
 
-pub(super) fn parse_return(pid: Pid, syscall: SysCallDisc) -> Result<(), SyscallParseError> {
+pub(super) fn parse_return(pid: Pid, syscall: SyscallDisc) -> Result<i64, SyscallParseError> {
     let ret = get_return_value(pid)?;
     trace!("return value: {ret}");
     if ret < 0 {
@@ -67,5 +87,5 @@ pub(super) fn parse_return(pid: Pid, syscall: SysCallDisc) -> Result<(), Syscall
             error: parse_syscall_error(ret),
         });
     }
-    Ok(())
+    Ok(ret)
 }
