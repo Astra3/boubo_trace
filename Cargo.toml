@@ -6,6 +6,7 @@ license = "GPL-3.0-or-later"
 
 [dependencies]
 anyhow = "1.0.86"
+clap = { version = "4.5.23", features = ["derive"] }
 elf = "0.7.4"
 env_logger = "0.11.5"
 libc = "0.2.158"
@@ -17,11 +18,7 @@ spawn-ptrace = "0.1.2"
 strum = { version = "0.26.3", features = ["derive"]}
 thiserror = "1.0.64"
 
-[build-dependencies]
-cc = "1.1.37"
-
 [dev-dependencies]
-cc = "1.1.37"
 insta = { version = "1.41.1", features = ["glob", "json"] }
 
 [profile.dev.package]

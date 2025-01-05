@@ -1,11 +1,15 @@
-use std::io::IoSliceMut;
+use std::{
+    fs::File,
+    io::{self, BufRead, BufReader, IoSliceMut},
+};
 
-use libc::{c_void, RAX};
-use log::{debug, info, trace};
+use libc::{c_void, PTRACE_EVENT_EXEC, PTRACE_EVENT_FORK, RAX};
+use log::{debug, info, trace, warn};
 use nix::{
     errno::Errno,
     sys::{
-        ptrace,
+        ptrace::{self},
+        signal::Signal,
         uio::{process_vm_readv, RemoteIoVec},
         wait::{waitpid, WaitStatus},
     },
@@ -16,9 +20,25 @@ use crate::syscall::SyscallParseError;
 
 use super::SyscallDisc;
 
-pub(super) fn wait_for_stop(pid: Pid) -> Result<(), SyscallParseError> {
+pub(super) enum WaitEvents {
+    Syscall,
+    Fork,
+    Exec,
+    Stopped,
+}
+
+pub(super) fn wait_for_stop(pid: Pid) -> Result<WaitEvents, SyscallParseError> {
     match waitpid(pid, None) {
-        Ok(WaitStatus::Stopped(_, _)) => Ok(()),
+        Ok(WaitStatus::PtraceEvent(_, Signal::SIGTRAP, PTRACE_EVENT_EXEC)) => {
+            warn!("stopped on ptrace event exec");
+            Ok(WaitEvents::Exec)
+        }
+        Ok(WaitStatus::PtraceEvent(_, Signal::SIGTRAP, PTRACE_EVENT_FORK)) => Ok(WaitEvents::Fork),
+        Ok(WaitStatus::PtraceSyscall(_)) => Ok(WaitEvents::Syscall),
+        Ok(WaitStatus::Stopped(_, _)) => {
+            warn!("non-syscall stop");
+            Ok(WaitEvents::Stopped)
+        }
         Ok(WaitStatus::Exited(_, exit_code)) => {
             info!("Process exited");
             Err(SyscallParseError::ProcessExit(exit_code))
@@ -88,4 +108,39 @@ pub(super) fn parse_return(pid: Pid, syscall: SyscallDisc) -> Result<i64, Syscal
         });
     }
     Ok(ret)
+}
+
+// TODO optimize this
+pub(super) fn translate_address(
+    pid: Pid,
+    requested_addr: usize,
+) -> Result<Option<usize>, io::Error> {
+    let pid_text = pid.to_string();
+    let file = File::open("/proc/".to_string() + &pid_text + "/task/" + &pid_text + "/maps")?;
+    let reader = BufReader::new(file);
+    for line in reader.lines() {
+        let line = line?;
+        let mut it = line.split_whitespace();
+        let section = it.next().unwrap();
+        let mut numbers = section.split("-");
+
+        // FIXME surely this cannot fail
+        let start = usize::from_str_radix(numbers.next().unwrap(), 16).unwrap();
+        let stop = usize::from_str_radix(numbers.next().unwrap(), 16).unwrap();
+
+        // permissions
+        it.next();
+        let offset = usize::from_str_radix(it.next().unwrap(), 16).unwrap();
+        if requested_addr < offset {
+            continue;
+        }
+
+        let difference = stop - start;
+        if requested_addr <= offset + difference {
+            return Ok(Some(start + requested_addr - offset));
+        }
+        continue;
+    }
+
+    Ok(None)
 }

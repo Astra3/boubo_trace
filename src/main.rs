@@ -1,87 +1,65 @@
-use std::{fs::File, io::{BufRead, BufReader}, process::Command};
+use std::process::Command;
 
-use elf::{endian::AnyEndian, file::FileHeader, section::SectionHeader, ElfBytes};
-use libc::c_void;
-use log::{debug, info, trace};
-use nix::{
-    sys::{ptrace::{self, Options}, wait::{waitpid, WaitStatus}},
-    unistd::Pid,
-};
+use clap::Parser;
+use log::{debug, info, LevelFilter};
+use nix::unistd::Pid;
 use spawn_ptrace::CommandPtraceSpawn;
-use tracer::syscall::{SyscallIter, SyscallParseError};
+use tracer::syscall::{SyscallIter, SyscallIterOpts};
 
-const EXECUTABLE: &str = "/home/roman/Documents/Škola/bakalářka/tracer/test_programs/build/open.exec";
+#[derive(Parser)]
+#[command(version, about)]
+struct Args {
+    /// Don't skip syscalls called before main in captured process
+    #[arg(long)]
+    no_skip_to_main: bool,
+    /// Path to the captured process
+    executable: String,
+    /// Verbosity, specify the flag more times for more verbosity.
+    ///
+    /// -v for info messages, -vv for debug messages and -vvv for trace messages.
+    ///
+    /// If you specify RUST_LOG environment variable, this flag is ignored and the variable's value
+    /// is used directly by env_logger.
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    verbose: u8,
+    /// Arguments of the captures process
+    args: Vec<String>,
+}
 
 fn main() -> Result<(), anyhow::Error> {
-    env_logger::init();
-    let entry_point = test_elf();
-    trace!("entry: {entry_point:#x}");
-    call_cmd(entry_point)?;
+    // env_logger::init();
+    let args = Args::parse();
+    match std::env::var_os("RUST_LOG") {
+        Some(_) => env_logger::init(),
+        None => {
+            let level = match args.verbose {
+                0 => LevelFilter::Warn,
+                1 => LevelFilter::Info,
+                2 => LevelFilter::Debug,
+                _ => LevelFilter::Trace,
+            };
+            env_logger::builder().filter_level(level).try_init()?;
+        }
+    }
+    call_cmd(args)?;
 
     Ok(())
 }
 
-fn test_elf() -> u64 {
-    let file = std::fs::read(EXECUTABLE).unwrap();
-    let elf = ElfBytes::<AnyEndian>::minimal_parse(file.as_slice()).unwrap();
-    elf.ehdr.e_entry
-}
-
-// TODO optimize this
-fn read_memory_map(pid: Pid, requested_addr: usize) -> Result<Option<usize>, anyhow::Error> {
-    let pid_text = pid.to_string();
-    let file = File::open("/proc/".to_string() + &pid_text + "/task/" + &pid_text + "/maps")?;
-    let reader = BufReader::new(file);
-    for line in reader.lines() {
-        let line = line?;
-        let mut it = line.split_whitespace();
-        let section = it.next().unwrap();
-        let mut numbers = section.split("-");
-
-        let start = usize::from_str_radix(numbers.next().unwrap(), 16)?;
-        let stop = usize::from_str_radix(numbers.next().unwrap(), 16)?;
-
-        // permissions
-        it.next();
-        let offset = usize::from_str_radix(it.next().unwrap(), 16)?;
-        if requested_addr < offset { continue; }
-        
-        let difference = stop - start;
-        if requested_addr <= offset + difference {
-            return Ok(Some(start + requested_addr - offset));
-        }
-        continue;
-    }
-
-    Ok(None)
-}
-
-fn call_cmd(entry_point: u64) -> Result<(), anyhow::Error> {
-    let cmd = Command::new(EXECUTABLE)
+fn call_cmd(args: Args) -> Result<(), anyhow::Error> {
+    println!("no skip to main: {:}", &args.no_skip_to_main);
+    let cmd = Command::new(args.executable)
         .current_dir("test_programs/build")
+        .args(args.args)
         .spawn_ptrace()?;
 
     let mut called_syscalls = vec![];
     let pid = Pid::from_raw(cmd.id() as i32);
-    trace!("traced pid: {pid}");
+    debug!("traced pid: {pid}");
 
-    debug!("creating breakpoint on main");
-    let entry = read_memory_map(pid, entry_point as usize)?.unwrap();
-    ptrace::setoptions(pid, Options::PTRACE_O_EXITKILL)?;
-    let original_byte = ptrace::read(pid, entry as *mut c_void)?;
-    trace!("original byte: {original_byte:#X}");
-    ptrace::write(pid, entry as *mut c_void, 0xCC)?;
+    let opts = SyscallIterOpts::default().skip_to_main(!args.no_skip_to_main);
 
-    ptrace::cont(pid, None)?;
-    match waitpid(pid, None) {
-        Ok(WaitStatus::Stopped(_, _)) => {
-            trace!("stopped on main");
-            ptrace::write(pid, entry as *mut c_void, original_byte)?;
-        }
-        _ => panic!(),
-    }
-
-    for call in SyscallIter(pid) {
+    for call in SyscallIter::new(pid, opts)? {
         info!("Parsed syscall: {call:?}");
         // if let Err(SyscallParseError::ProcessExit(_)) = call {
         //     break;

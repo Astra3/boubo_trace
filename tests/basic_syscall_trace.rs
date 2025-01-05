@@ -8,7 +8,7 @@ mod tests {
         unistd::Pid,
     };
     use spawn_ptrace::CommandPtraceSpawn;
-    use tracer::syscall::{Syscall, SyscallIter, SyscallParseError};
+    use tracer::syscall::{Syscall, SyscallIter, SyscallIterOpts, SyscallParseError};
     static INIT: Once = Once::new();
 
     fn initialize() {
@@ -32,11 +32,11 @@ mod tests {
                 .spawn_ptrace()
                 .unwrap();
             let pid = Pid::from_raw(cmd.id() as i32);
-            ptrace::setoptions(pid, Options::PTRACE_O_EXITKILL).unwrap();
 
-            let it = SyscallIter(pid);
+            let it = SyscallIter::new(pid, SyscallIterOpts::default());
             // FIXME improve error serialize, if necessary
             let called_syscalls: Vec<_> = it
+                .unwrap()
                 .filter(|call| !matches!(call, Ok(Syscall::Unknown { .. })))
                 .take_while(|call| !matches!(call, Err(SyscallParseError::ProcessExit(_))))
                 .collect();

@@ -1,0 +1,152 @@
+---
+source: tests/basic_syscall_trace.rs
+expression: called_syscalls
+input_file: test_programs/build/exec.exec
+snapshot_kind: text
+---
+[
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Close,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Read,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Close,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Openat,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Write,
+            error: ENOSYS,
+        },
+    ),
+    Err(
+        SyscallError {
+            syscall: Close,
+            error: ENOSYS,
+        },
+    ),
+]
