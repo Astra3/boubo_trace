@@ -1,30 +1,27 @@
+use core::str;
 use std::io;
 
 use elf::{endian::AnyEndian, ElfBytes};
-use libc::{c_void, mode_t, RAX};
+use libc::{c_void, user_regs_struct, RAX};
 use log::{debug, error, trace, warn};
 use nix::{
     errno::Errno,
+    fcntl,
+    sched::CloneFlags,
     sys::{
         ptrace::{self, Options},
+        stat,
         wait::{waitpid, WaitStatus},
     },
-    unistd::Pid,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use utils::{
-    get_return_value, parse_return, parse_syscall_error, read_bytes_memory, read_cstring,
-    translate_address, wait_for_stop, WaitEvents,
-};
 
-mod utils;
+use crate::tracee::{parse_syscall_error, Tracee, WaitEvents};
 
-#[derive(
-    Debug, Clone, PartialEq, Serialize, Deserialize, strum::EnumIs, strum::EnumDiscriminants,
-)]
+#[derive(Debug, Clone, PartialEq, strum::EnumIs, strum::EnumDiscriminants)]
 #[strum_discriminants(derive(strum::Display))]
-#[serde(rename_all = "snake_case")]
+// #[serde(rename_all = "snake_case")]
 pub enum Syscall {
     Read {
         fd: i32,
@@ -41,13 +38,23 @@ pub enum Syscall {
     Openat {
         dirfd: i32,
         pathname: Vec<u8>,
-        flags: i32,
-        mode: mode_t,
+        flags: fcntl::OFlag,
+        mode: stat::Mode,
     },
     Execve {
         pathname: Vec<u8>,
         argv: Vec<u8>,
-        envd: Vec<u8>,
+        envp: Vec<u8>,
+    },
+    // this is ONLY FOR x86-64
+    Clone {
+        flags: CloneFlags,
+        stack: usize,
+        /// Pointer to i32 in child
+        parent_tid: usize,
+        tls: u64,
+        /// Pointer to i32 in child
+        child_tid: usize,
     },
     ExitGroup {
         status: i32,
@@ -61,6 +68,19 @@ pub enum Syscall {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SyscallArgs(usize, usize, usize, usize, usize, usize);
+
+impl SyscallArgs {
+    pub fn new(regs: &user_regs_struct) -> SyscallArgs {
+        SyscallArgs(
+            regs.rdi as usize,
+            regs.rsi as usize,
+            regs.rdx as usize,
+            regs.r10 as usize,
+            regs.r8 as usize,
+            regs.r9 as usize,
+        )
+    }
+}
 
 type SyscallDisc = SyscallDiscriminants;
 
@@ -89,25 +109,18 @@ impl Serialize for SyscallParseError {
 
 impl Syscall {
     // TODO wait for next thread syscall from wait
-    pub fn parse(pid: Pid) -> Result<Syscall, SyscallParseError> {
+    pub fn parse(tracee: &Tracee) -> Result<Syscall, SyscallParseError> {
         debug!("Parsing syscall entry...");
-        wait_for_stop(pid)?;
-        let regs = ptrace::getregs(pid)?;
+        tracee.wait_for_stop()?;
+        let regs = ptrace::getregs(tracee.pid)?;
         // TODO this could read /proc/pid/syscall
-        let args = SyscallArgs(
-            regs.rdi as usize,
-            regs.rsi as usize,
-            regs.rdx as usize,
-            regs.r10 as usize,
-            regs.r8 as usize,
-            regs.r9 as usize,
-        );
+        let args = SyscallArgs::new(&regs);
         trace!("registers: {regs:?}");
         match regs.orig_rax {
             0 => {
                 // TODO don't read it all
-                let read = parse_return(pid, SyscallDisc::Read)?;
-                let bytes = read_bytes_memory(pid, args.1, read as usize)?;
+                let read = tracee.parse_return(SyscallDisc::Read)?;
+                let bytes = tracee.memcpy(args.1, read as usize)?;
                 Ok(Syscall::Read {
                     fd: args.0 as i32,
                     read_bytes: bytes,
@@ -115,34 +128,53 @@ impl Syscall {
                 })
             }
             1 => {
-                let text = read_bytes_memory(pid, args.1, args.2)?;
+                let text = tracee.memcpy(args.1, args.2)?;
                 trace!("address : {:#X}", args.1);
-                parse_return(pid, SyscallDisc::Write)?;
+                tracee.parse_return(SyscallDisc::Write)?;
                 Ok(Syscall::Write {
                     fd: args.0 as i32,
                     buf: text,
                 })
             }
             3 => {
-                parse_return(pid, SyscallDisc::Close)?;
+                tracee.parse_return(SyscallDisc::Close)?;
                 Ok(Syscall::Close { fd: args.0 as i32 })
             }
+            // 56 => {
+            //     // this is ONLY compatible with x86-64 and some other weird ass architectures
+            //     let clone = Syscall::Clone {
+            //         flags: CloneFlags::empty(),
+            //         stack: args.1,
+            //         parent_tid: args.2,
+            //         tls: args.3 as u64,
+            //         child_tid: args.4,
+            //     };
+            //     trace!(
+            //         "clone flags: {}, {:#?}",
+            //         args.0 as i32,
+            //         CloneFlags::from_bits_truncate(args.0 as i32)
+            //     );
+            //     ptrace::cont(tracee.pid, None)?;
+            //     tracee.wait_for_stop()?;
+            //     tracee.parse_return(SyscallDisc::Clone)?;
+            //     Ok(clone)
+            // }
             59 => {
-                let pathname = read_cstring(pid, args.0)?;
-                let argv = read_cstring(pid, args.1)?;
-                let envd = read_cstring(pid, args.2)?;
-                ptrace::syscall(pid, None)?;
-                let wait = wait_for_stop(pid)?;
-                let ret = parse_return(pid, SyscallDisc::Execve)?;
-                trace!("return value: {ret}");
+                let pathname = tracee.strcpy(args.0)?;
+                trace!("pathname: {}", str::from_utf8(&pathname).unwrap_or("cannot decode"));
+                let argv = tracee.strcpy(args.1)?;
+                let envp = tracee.strcpy(args.2)?;
+                ptrace::syscall(tracee.pid, None)?;
+                let wait = tracee.wait_for_stop()?;
+                tracee.parse_return(SyscallDisc::Execve)?;
                 match wait {
                     WaitEvents::Exec => Ok(Syscall::Execve {
                         pathname,
                         argv,
-                        envd,
+                        envp,
                     }),
                     _ => {
-                        let return_value = ptrace::read_user(pid, (RAX * 8) as *mut c_void)?;
+                        let return_value = ptrace::read_user(tracee.pid, (RAX * 8) as *mut c_void)?;
                         Err(SyscallParseError::SyscallError {
                             syscall: SyscallDisc::Execve,
                             error: parse_syscall_error(return_value),
@@ -154,18 +186,20 @@ impl Syscall {
                 status: args.0 as i32,
             }),
             257 => {
-                let pathname = read_cstring(pid, args.1)?;
-                parse_return(pid, SyscallDisc::Openat)?;
+                let pathname = tracee.strcpy(args.1)?;
+                tracee.parse_return(SyscallDisc::Openat)?;
                 Ok(Syscall::Openat {
                     dirfd: args.0 as i32,
                     pathname,
-                    flags: args.2 as i32,
-                    mode: args.3 as u32,
+                    // flags: args.2 as i32,
+                    flags: fcntl::OFlag::from_bits(args.2 as i32).unwrap(),
+                    // mode: args.3 as u32,
+                    mode: stat::Mode::from_bits(args.3 as u32).unwrap(),
                 })
             }
             _ => {
                 warn!("Unknown syscall was called");
-                let return_value = get_return_value(pid)?;
+                let return_value = tracee.get_return_value()?;
                 Ok(Syscall::Unknown {
                     id: regs.orig_rax,
                     args,
@@ -209,10 +243,10 @@ pub enum SyscallIterError {
     IOError(#[from] io::Error),
 }
 
-pub struct SyscallIter(Pid);
+pub struct SyscallIter(Tracee);
 
 impl SyscallIter {
-    pub fn new(pid: Pid, opts: SyscallIterOpts) -> Result<Self, SyscallIterError> {
+    pub fn new(tracee: Tracee, opts: SyscallIterOpts) -> Result<Self, SyscallIterError> {
         let mut options = Options::PTRACE_O_TRACESYSGOOD
             | Options::PTRACE_O_TRACEEXEC
             | Options::PTRACE_O_TRACEFORK
@@ -220,30 +254,30 @@ impl SyscallIter {
         if opts.kill_on_exit {
             options |= Options::PTRACE_O_EXITKILL;
         }
-        ptrace::setoptions(pid, options)?;
+        ptrace::setoptions(tracee.pid, options)?;
         if opts.skip_to_main {
-            let file = std::fs::read("/proc/".to_owned() + &pid.to_string() + "/exe")?;
+            let file = std::fs::read("/proc/".to_owned() + &tracee.pid.to_string() + "/exe")?;
             let elf = ElfBytes::<AnyEndian>::minimal_parse(file.as_slice()).unwrap();
             let entry_point = elf.ehdr.e_entry;
 
             debug!("creating breakpoint on main()");
-            let main_address = translate_address(pid, entry_point as usize)?.unwrap();
+            let main_address = tracee.translate_address(entry_point as usize)?.unwrap();
             let main_addr_void = main_address as *mut c_void;
-            let original_word = ptrace::read(pid, main_addr_void)?;
+            let original_word = ptrace::read(tracee.pid, main_addr_void)?;
             trace!("original word: {original_word:#X}");
             // FIXME this isn't gonna be compatible outside of x86
-            ptrace::write(pid, main_addr_void, 0xCC)?;
+            ptrace::write(tracee.pid, main_addr_void, 0xCC)?;
 
-            ptrace::cont(pid, None)?;
-            match waitpid(pid, None) {
+            ptrace::cont(tracee.pid, None)?;
+            match waitpid(tracee.pid, None) {
                 Ok(WaitStatus::Stopped(_, _)) => {
                     trace!("stopped on main");
-                    ptrace::write(pid, main_addr_void, original_word)?;
+                    ptrace::write(tracee.pid, main_addr_void, original_word)?;
                 }
                 _ => panic!(),
             }
         }
-        Ok(Self(pid))
+        Ok(Self(tracee))
     }
 }
 
@@ -251,14 +285,14 @@ impl Iterator for SyscallIter {
     type Item = Result<Syscall, SyscallParseError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match ptrace::syscall(self.0, None) {
+        match ptrace::syscall(self.0.pid, None) {
             Err(Errno::ESRCH) => {
                 return None;
             }
             Err(err) => return Some(Err(err.into())),
             _ => (),
         };
-        match Syscall::parse(self.0) {
+        match Syscall::parse(&self.0) {
             Ok(call) => Some(Ok(call)),
             // TODO should process exit end the iterator?
             Err(err) => Some(Err(err)),

@@ -4,7 +4,7 @@ use clap::Parser;
 use log::{debug, info, LevelFilter};
 use nix::unistd::Pid;
 use spawn_ptrace::CommandPtraceSpawn;
-use tracer::syscall::{SyscallIter, SyscallIterOpts};
+use tracer::{syscall::{SyscallIter, SyscallIterOpts}, tracee::Tracee};
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -59,7 +59,7 @@ fn call_cmd(args: Args) -> Result<(), anyhow::Error> {
 
     let opts = SyscallIterOpts::default().skip_to_main(!args.no_skip_to_main);
 
-    for call in SyscallIter::new(pid, opts)? {
+    for call in SyscallIter::new(Tracee::new(pid), opts)? {
         info!("Parsed syscall: {call:?}");
         // if let Err(SyscallParseError::ProcessExit(_)) = call {
         //     break;
