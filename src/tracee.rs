@@ -4,8 +4,11 @@ use std::{
     io::{self, BufRead, BufReader, IoSliceMut},
 };
 
-use libc::{PTRACE_EVENT_EXEC, PTRACE_EVENT_FORK, RAX};
-use log::{debug, info, trace, warn};
+use libc::{
+    c_long, siginfo_t, user_regs_struct, PTRACE_EVENT_CLONE, PTRACE_EVENT_EXEC, PTRACE_EVENT_FORK,
+    RAX,
+};
+use log::{debug, error, info, trace, warn};
 use nix::{
     errno::Errno,
     sys::{
@@ -19,26 +22,53 @@ use nix::{
 
 use crate::syscall::{SyscallDiscriminants, SyscallParseError};
 
+#[derive(strum::EnumIs)]
 pub enum WaitEvents {
     Syscall,
     Fork,
     Exec,
-    Stopped,
+    Stopped(Signal),
+    Clone,
+}
+
+#[derive(Default)]
+struct SignalStorage {
+    signal: Option<Signal>,
+}
+
+impl SignalStorage {
+    pub fn store(&mut self, signal: Signal) {
+        if signal != Signal::SIGTRAP {
+            self.signal = Some(signal);
+        }
+    }
+
+    pub fn get(&mut self) -> Option<Signal> {
+        let signal = self.signal;
+        self.signal = None;
+        signal
+    }
 }
 
 const MAX_BYTES_CSTRING: usize = 2048 * 1024; // 2 MiB
 const BUFFER_SIZE: usize = 128;
 
+type ErrnoResult<T> = Result<T, Errno>;
+
 pub struct Tracee {
-    pub(crate) pid: Pid,
+    pid: Pid,
+    signal: SignalStorage,
 }
 
 impl Tracee {
     pub fn new(pid: Pid) -> Tracee {
-        Tracee { pid }
+        Tracee {
+            pid,
+            signal: SignalStorage::default(),
+        }
     }
 
-    pub fn wait_for_stop(&self) -> Result<WaitEvents, SyscallParseError> {
+    pub fn wait_for_stop(&mut self) -> Result<WaitEvents, SyscallParseError> {
         match waitpid(self.pid, None) {
             Ok(WaitStatus::PtraceEvent(_, Signal::SIGTRAP, PTRACE_EVENT_EXEC)) => {
                 warn!("stopped on ptrace event exec");
@@ -47,21 +77,32 @@ impl Tracee {
             Ok(WaitStatus::PtraceEvent(_, Signal::SIGTRAP, PTRACE_EVENT_FORK)) => {
                 Ok(WaitEvents::Fork)
             }
+            Ok(WaitStatus::PtraceEvent(_, Signal::SIGTRAP, PTRACE_EVENT_CLONE)) => {
+                Ok(WaitEvents::Clone)
+            }
             Ok(WaitStatus::PtraceSyscall(_)) => Ok(WaitEvents::Syscall),
-            Ok(WaitStatus::Stopped(_, _)) => {
-                warn!("non-syscall stop");
-                Ok(WaitEvents::Stopped)
+            Ok(WaitStatus::Stopped(pid, signal)) => {
+                warn!("tracee {pid:?} received {signal:?} signal");
+                self.signal.store(signal);
+                Ok(WaitEvents::Stopped(signal))
             }
             Ok(WaitStatus::Exited(_, exit_code)) => {
                 info!("Process exited");
                 Err(SyscallParseError::ProcessExit(exit_code))
+            }
+            Ok(WaitStatus::Signaled(pid, signal, core_dumped)) => {
+                warn!("tracee {pid:?} was signaled {signal:?} and dumped core: {core_dumped}");
+                Err(SyscallParseError::Terminated {
+                    signal,
+                    core_dumped,
+                })
             }
             Ok(status) => Err(SyscallParseError::UnexpectedWaitStatus(status)),
             Err(err) => Err(SyscallParseError::WaitPidError(err)),
         }
     }
 
-    pub fn memcpy(&self, base: usize, len: usize) -> Result<Vec<u8>, Errno> {
+    pub fn memcpy(&self, base: usize, len: usize) -> ErrnoResult<Vec<u8>> {
         let mut data = vec![0; len];
         process_vm_readv(
             self.pid,
@@ -72,7 +113,7 @@ impl Tracee {
     }
 
     // FIXME does this actually work?
-    pub fn memcpy_until<T>(&self, base: usize, function: T) -> Result<Vec<u8>, Errno>
+    pub fn memcpy_until<T>(&self, base: usize, function: T) -> ErrnoResult<Vec<u8>>
     where
         T: Fn(&u8) -> bool,
     {
@@ -103,20 +144,40 @@ impl Tracee {
         Ok(data)
     }
 
-    pub fn strcpy(&self, base: usize) -> Result<Vec<u8>, Errno> {
+    pub fn strcpy(&self, base: usize) -> ErrnoResult<Vec<u8>> {
         self.memcpy_until(base, |num| *num == 0)
     }
 
-    pub fn get_return_value(&self) -> Result<i64, SyscallParseError> {
-        debug!("Parsing syscall exit...");
-        ptrace::syscall(self.pid, None)?;
-        self.wait_for_stop()?;
-        trace!("exit regs: {:?}", ptrace::getregs(self.pid)?);
+    pub fn read_rax(&self) -> Result<i64, SyscallParseError> {
         Ok(ptrace::read_user(self.pid, (RAX * 8) as *mut c_void)?)
     }
 
-    pub fn parse_return(&self, syscall: SyscallDiscriminants) -> Result<i64, SyscallParseError> {
-        let ret = self.get_return_value()?;
+    pub fn getregs(&self) -> ErrnoResult<user_regs_struct> {
+        ptrace::getregs(self.pid)
+    }
+
+    pub fn read(&self, addr: *mut c_void) -> ErrnoResult<c_long> {
+        ptrace::read(self.pid, addr)
+    }
+
+    pub fn write(&self, addr: *mut c_void, data: c_long) -> ErrnoResult<()> {
+        ptrace::write(self.pid, addr, data)
+    }
+
+    pub fn setoptions(&self, options: ptrace::Options) -> ErrnoResult<()> {
+        ptrace::setoptions(self.pid, options)
+    }
+
+    pub fn parse_return(
+        &mut self,
+        syscall: SyscallDiscriminants,
+    ) -> Result<i64, SyscallParseError> {
+        debug!("parsing return...");
+        self.syscall()?;
+        self.wait_for_stop()?;
+        trace!("exit regs: {:?}", ptrace::getregs(self.pid)?);
+
+        let ret = self.read_rax()?;
         trace!("return value: {ret}");
         if ret < 0 {
             return Err(SyscallParseError::SyscallError {
@@ -127,11 +188,16 @@ impl Tracee {
         Ok(ret)
     }
 
+    pub fn syscall(&mut self) -> ErrnoResult<()> {
+        ptrace::syscall(self.pid, self.signal.get())
+    }
+
+    pub fn cont(&mut self) -> ErrnoResult<()> {
+        ptrace::cont(self.pid, self.signal.get())
+    }
+
     // TODO optimize this
-    pub fn translate_address(
-        &self,
-        requested_addr: usize,
-    ) -> Result<Option<usize>, io::Error> {
+    pub fn translate_address(&self, requested_addr: usize) -> Result<Option<usize>, io::Error> {
         let pid_text = self.pid.to_string();
         let file = File::open("/proc/".to_string() + &pid_text + "/task/" + &pid_text + "/maps")?;
         let reader = BufReader::new(file);
@@ -160,6 +226,10 @@ impl Tracee {
         }
 
         Ok(None)
+    }
+
+    pub fn get_pid_string(&self) -> String {
+        self.pid.to_string()
     }
 }
 
