@@ -1,14 +1,13 @@
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, process::Command, sync::Once};
+    use std::{process::Command, sync::Once};
 
     use insta::glob;
-    use nix::{
-        sys::ptrace::{self, Options},
-        unistd::Pid,
-    };
+    use nix::
+        unistd::Pid
+    ;
     use spawn_ptrace::CommandPtraceSpawn;
-    use tracer::syscall::{Syscall, SyscallIter, SyscallIterOpts, SyscallParseError};
+    use tracer::{syscall::{Syscall, SyscallIter, SyscallIterOpts, SyscallParseError}, tracee::Tracee};
     static INIT: Once = Once::new();
 
     fn initialize() {
@@ -33,7 +32,7 @@ mod tests {
                 .unwrap();
             let pid = Pid::from_raw(cmd.id() as i32);
 
-            let it = SyscallIter::new(pid, SyscallIterOpts::default());
+            let it = SyscallIter::new(Tracee::new(pid), SyscallIterOpts::default());
             // FIXME improve error serialize, if necessary
             let called_syscalls: Vec<_> = it
                 .unwrap()

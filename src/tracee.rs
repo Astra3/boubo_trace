@@ -5,10 +5,9 @@ use std::{
 };
 
 use libc::{
-    c_long, siginfo_t, user_regs_struct, PTRACE_EVENT_CLONE, PTRACE_EVENT_EXEC, PTRACE_EVENT_FORK,
-    RAX,
+    c_long, user_regs_struct, PTRACE_EVENT_CLONE, PTRACE_EVENT_EXEC, PTRACE_EVENT_FORK, RAX,
 };
-use log::{debug, error, info, trace, warn};
+use log::{debug, info, trace, warn};
 use nix::{
     errno::Errno,
     sys::{
@@ -50,6 +49,7 @@ impl SignalStorage {
     }
 }
 
+// TODO allow configuring this
 const MAX_BYTES_CSTRING: usize = 2048 * 1024; // 2 MiB
 const BUFFER_SIZE: usize = 128;
 
@@ -81,8 +81,7 @@ impl Tracee {
                 Ok(WaitEvents::Clone)
             }
             Ok(WaitStatus::PtraceSyscall(_)) => Ok(WaitEvents::Syscall),
-            Ok(WaitStatus::Stopped(pid, signal)) => {
-                warn!("tracee {pid:?} received {signal:?} signal");
+            Ok(WaitStatus::Stopped(_, signal)) => {
                 self.signal.store(signal);
                 Ok(WaitEvents::Stopped(signal))
             }
@@ -104,12 +103,23 @@ impl Tracee {
 
     pub fn memcpy(&self, base: usize, len: usize) -> ErrnoResult<Vec<u8>> {
         let mut data = vec![0; len];
+        if base == 0 { return Ok(vec![0]) }
         process_vm_readv(
             self.pid,
             &mut [IoSliceMut::new(&mut data)],
             &[RemoteIoVec { base, len }],
         )?;
         Ok(data)
+    }
+
+    pub fn memcpy_struct<T>(&self, base: usize) -> ErrnoResult<Option<T>>
+    where
+        T: Clone + Copy,
+    {
+        if base == 0 { return Ok(None) }
+        let bytes = self.memcpy(base, std::mem::size_of::<T>())?;
+        let (_, sock_addr, _) = unsafe { bytes.align_to::<T>() };
+        Ok(Some(sock_addr[0]))
     }
 
     // FIXME does this actually work?
@@ -141,6 +151,9 @@ impl Tracee {
             }
             data.extend_from_slice(&buf);
         }
+        if data.len() >= MAX_BYTES_CSTRING - 1 {
+            debug!("reached memcpy_until byte read limit");
+        }
         Ok(data)
     }
 
@@ -156,12 +169,12 @@ impl Tracee {
         ptrace::getregs(self.pid)
     }
 
-    pub fn read(&self, addr: *mut c_void) -> ErrnoResult<c_long> {
-        ptrace::read(self.pid, addr)
+    pub fn read(&self, addr: usize) -> ErrnoResult<c_long> {
+        ptrace::read(self.pid, addr as *mut c_void)
     }
 
-    pub fn write(&self, addr: *mut c_void, data: c_long) -> ErrnoResult<()> {
-        ptrace::write(self.pid, addr, data)
+    pub fn write(&self, addr: usize, data: c_long) -> ErrnoResult<()> {
+        ptrace::write(self.pid, addr as *mut c_void, data)
     }
 
     pub fn setoptions(&self, options: ptrace::Options) -> ErrnoResult<()> {
@@ -196,7 +209,6 @@ impl Tracee {
         ptrace::cont(self.pid, self.signal.get())
     }
 
-    // TODO optimize this
     pub fn translate_address(&self, requested_addr: usize) -> Result<Option<usize>, io::Error> {
         let pid_text = self.pid.to_string();
         let file = File::open("/proc/".to_string() + &pid_text + "/task/" + &pid_text + "/maps")?;
@@ -207,7 +219,6 @@ impl Tracee {
             let section = it.next().unwrap();
             let mut numbers = section.split("-");
 
-            // FIXME surely this cannot fail
             let start = usize::from_str_radix(numbers.next().unwrap(), 16).unwrap();
             let stop = usize::from_str_radix(numbers.next().unwrap(), 16).unwrap();
 

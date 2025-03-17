@@ -12,7 +12,5 @@ impl From<i32> for SocketType {
         let sock_type = socket::SockType::try_from(value & !socket::SockFlag::all().bits()).unwrap();
 
         SocketType { r#type: sock_type, flags }
-
-
     }
 }

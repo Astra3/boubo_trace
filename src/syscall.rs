@@ -1,33 +1,34 @@
 use core::str;
-use std::{io, str::Utf8Error};
+use std::io;
 
-use clap::error;
 use elf::{endian::AnyEndian, ElfBytes};
-use libc::{c_void, user_regs_struct, RAX};
+use libc::{sockaddr, socklen_t};
 use log::{debug, error, trace, warn};
+use new_types::{sockaddr_ser, AddressFamilySer, ModeSer, OFlagSer, SocketType};
 use nix::{
     errno::Errno,
     fcntl,
-    sched::CloneFlags,
     sys::{
-        ptrace::{self, Options},
-        signal::Signal,
-        socket::{self, socket},
+        ptrace::Options,
+        socket::{self},
         stat,
-        wait::{waitpid, WaitStatus},
     },
 };
-use serde::{Deserialize, Serialize};
-use sock_type::SocketType;
+pub use parse_error::SyscallParseError;
+pub use syscall_args::SyscallArgs;
 use thiserror::Error;
 
 use crate::tracee::{parse_syscall_error, Tracee, WaitEvents};
 
+pub mod parse_error;
 mod sock_type;
+mod new_types;
+pub mod syscall_args;
 
-#[derive(Debug, Clone, PartialEq, strum::EnumIs, strum::EnumDiscriminants)]
+// FIXME many syscalls don't store their return values
+#[derive(Debug, Clone, strum::EnumIs, strum::EnumDiscriminants, serde::Serialize)]
 #[strum_discriminants(derive(strum::Display))]
-// #[serde(rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum Syscall {
     Read {
         fd: i32,
@@ -42,16 +43,32 @@ pub enum Syscall {
         fd: i32,
     },
     Socket {
-        domain: socket::AddressFamily,
+        domain: AddressFamilySer,
         r#type: SocketType,
-        // FIXME this could be SockProtocol from nix
+        // TODO this could be SockProtocol from nix, if it was easy to parse
         protocol: i32,
+    },
+    Bind {
+        sockfd: i32,
+        // TODO the representation of all sockaddr could be a bit more readable by parsing it
+        // differently
+        addr: Option<sockaddr_ser>,
+        addrlen: socklen_t,
+    },
+    Listen {
+        sockfd: i32,
+        backlog: i32,
+    },
+    Accept {
+        sockfd: i32,
+        addr: sockaddr_ser,
+        addrlen: socklen_t,
     },
     Openat {
         dirfd: i32,
         pathname: Vec<u8>,
-        flags: fcntl::OFlag,
-        mode: stat::Mode,
+        flags: OFlagSer,
+        mode: ModeSer,
     },
     Execve {
         pathname: Vec<u8>,
@@ -79,59 +96,9 @@ pub enum Syscall {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SyscallArgs(usize, usize, usize, usize, usize, usize);
-
-impl SyscallArgs {
-    pub fn new(regs: &user_regs_struct) -> SyscallArgs {
-        SyscallArgs(
-            regs.rdi as usize,
-            regs.rsi as usize,
-            regs.rdx as usize,
-            regs.r10 as usize,
-            regs.r8 as usize,
-            regs.r9 as usize,
-        )
-    }
-}
-
 type SyscallDisc = SyscallDiscriminants;
 
-#[derive(Error, Debug)]
-pub enum SyscallParseError {
-    #[error("error in tracee's syscall")]
-    SyscallError { syscall: SyscallDisc, error: Errno },
-    #[error("error in syscall by tracer: {0:?}")]
-    PtraceError(#[from] Errno),
-    #[error("tracee process is not running")]
-    ProcessExit(i32),
-    #[error("unexpected status returned by waitpid")]
-    UnexpectedWaitStatus(WaitStatus),
-    #[error("error returned by waitpid")]
-    WaitPidError(Errno),
-    // FIXME this isn't really a parse error
-    #[error("tracee terminated by OS")]
-    Terminated { signal: Signal, core_dumped: bool },
-}
-
-impl Serialize for SyscallParseError {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_u32(20)
-    }
-}
-
-fn bytes_as_string(bytes: &[u8]) {
-    let text = str::from_utf8(bytes);
-    if let Ok(text) = text {
-        debug!("bytes as string: {text:?}");
-    }
-}
-
 impl Syscall {
-    // TODO wait for next thread syscall from wait
     pub fn parse(tracee: &mut Tracee) -> Result<Syscall, SyscallParseError> {
         debug!("Parsing syscall entry...");
         tracee.wait_for_stop()?;
@@ -165,9 +132,34 @@ impl Syscall {
             41 => {
                 tracee.parse_return(SyscallDisc::Socket)?;
                 Ok(Syscall::Socket {
-                    domain: socket::AddressFamily::from_i32(args.0 as i32).unwrap(),
+                    domain: socket::AddressFamily::from_i32(args.0 as i32).unwrap().into(),
                     r#type: SocketType::from(args.1 as i32),
                     protocol: args.2 as i32,
+                })
+            }
+            43 => {
+                let sock_addr = tracee.memcpy_struct::<sockaddr>(args.1)?;
+                tracee.parse_return(SyscallDisc::Accept)?;
+                Ok(Syscall::Accept {
+                    sockfd: args.0 as i32,
+                    addr: sock_addr.unwrap().into(),
+                    addrlen: args.2 as socklen_t,
+                })
+            }
+            49 => {
+                let sock_addr = tracee.memcpy_struct::<sockaddr>(args.1)?;
+                tracee.parse_return(SyscallDisc::Bind)?;
+                Ok(Syscall::Bind {
+                    sockfd: args.0 as i32,
+                    addr: sock_addr.map(Into::into),
+                    addrlen: args.2 as socklen_t,
+                })
+            }
+            50 => {
+                tracee.parse_return(SyscallDisc::Listen)?;
+                Ok(Syscall::Listen {
+                    sockfd: args.0 as i32,
+                    backlog: args.1 as i32,
                 })
             }
             56 => {
@@ -179,7 +171,6 @@ impl Syscall {
                     child_tid: args.3,
                     tls: args.4 as u64,
                 };
-                // FIXME the logic is incorrect, it should check if the second wait is clone
                 tracee.parse_return(SyscallDisc::Clone)?;
                 Ok(clone)
                 // tracee.syscall()?;
@@ -200,7 +191,7 @@ impl Syscall {
             59 => {
                 let pathname = tracee.strcpy(args.0)?;
                 bytes_as_string(&pathname);
-                // kdo ho zavolal, kdy a jaká je cmdline
+                // when the process was called and what was its cmdline
                 let argv = tracee.strcpy(args.1)?;
                 let envp = tracee.strcpy(args.2)?;
                 tracee.syscall()?;
@@ -233,9 +224,9 @@ impl Syscall {
                     dirfd: args.0 as i32,
                     pathname,
                     // flags: args.2 as i32,
-                    flags: fcntl::OFlag::from_bits(args.2 as i32).unwrap(),
+                    flags: fcntl::OFlag::from_bits(args.2 as i32).unwrap().into(),
                     // mode: args.3 as u32,
-                    mode: stat::Mode::from_bits(args.3 as u32).unwrap(),
+                    mode: stat::Mode::from_bits(args.3 as u32).unwrap().into(),
                 })
             }
             _ => {
@@ -305,17 +296,16 @@ impl SyscallIter {
 
             debug!("creating breakpoint on main()");
             let main_address = tracee.translate_address(entry_point as usize)?.unwrap();
-            let main_addr_void = main_address as *mut c_void;
-            let original_word = tracee.read(main_addr_void)?;
+            let original_word = tracee.read(main_address)?;
             trace!("original word: {original_word:#X}");
-            // FIXME this isn't gonna be compatible outside of x86
-            tracee.write(main_addr_void, 0xCC)?;
+            // this isn't gonna be compatible outside of x86
+            tracee.write(main_address, 0xCC)?;
 
             tracee.cont()?;
             match tracee.wait_for_stop() {
                 Ok(WaitEvents::Stopped(_)) => {
                     trace!("stopped on main");
-                    tracee.write(main_addr_void, original_word)?;
+                    tracee.write(main_address, original_word)?;
                 }
                 _ => panic!(),
             }
@@ -337,8 +327,15 @@ impl Iterator for SyscallIter {
         };
         match Syscall::parse(&mut self.0) {
             Ok(call) => Some(Ok(call)),
-            // TODO should process exit end the iterator?
             Err(err) => Some(Err(err)),
         }
+    }
+}
+
+/// Try to convert a slice of bytes to UTF-8 string and prints it as debug log, if successful
+fn bytes_as_string(bytes: &[u8]) {
+    let text = str::from_utf8(bytes);
+    if let Ok(text) = text {
+        debug!("bytes as string: {text:?}");
     }
 }
