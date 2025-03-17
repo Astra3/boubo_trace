@@ -1,0 +1,103 @@
+---
+source: tests/basic_syscall_trace.rs
+expression: called_syscalls
+input_file: test_programs/build/bind.exec
+snapshot_kind: text
+---
+[
+    Ok(
+        Socket {
+            domain: AddressFamilySer(
+                Inet,
+            ),
+            type: SocketType {
+                type: Stream,
+                flags: SockFlag(
+                    0x0,
+                ),
+            },
+            protocol: 0,
+        },
+    ),
+    Ok(
+        Bind {
+            sockfd: 3,
+            addr: Some(
+                sockaddr_ser(
+                    sockaddr {
+                        sa_family: 2,
+                        sa_data: [
+                            31,
+                            -112,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                        ],
+                    },
+                ),
+            ),
+            addrlen: 16,
+        },
+    ),
+    Ok(
+        Listen {
+            sockfd: 3,
+            backlog: 1,
+        },
+    ),
+    Ok(
+        Accept {
+            sockfd: 3,
+            addr: Some(
+                sockaddr_ser(
+                    sockaddr {
+                        sa_family: 2,
+                        sa_data: [
+                            -124,
+                            -2,
+                            127,
+                            0,
+                            0,
+                            1,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                        ],
+                    },
+                ),
+            ),
+            addrlen: Some(
+                16,
+            ),
+        },
+    ),
+    Ok(
+        Close {
+            fd: 4,
+        },
+    ),
+    Ok(
+        Close {
+            fd: 3,
+        },
+    ),
+    Ok(
+        ExitGroup {
+            status: 0,
+        },
+    ),
+]

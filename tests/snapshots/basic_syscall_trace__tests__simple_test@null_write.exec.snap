@@ -1,0 +1,14 @@
+---
+source: tests/basic_syscall_trace.rs
+expression: called_syscalls
+input_file: test_programs/build/null_write.exec
+snapshot_kind: text
+---
+[
+    Err(
+        Terminated {
+            signal: SIGSEGV,
+            core_dumped: true,
+        },
+    ),
+]

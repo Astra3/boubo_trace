@@ -61,8 +61,8 @@ pub enum Syscall {
     },
     Accept {
         sockfd: i32,
-        addr: sockaddr_ser,
-        addrlen: socklen_t,
+        addr: Option<sockaddr_ser>,
+        addrlen: Option<socklen_t>,
     },
     Openat {
         dirfd: i32,
@@ -106,6 +106,7 @@ impl Syscall {
         // TODO this could read /proc/pid/syscall
         let args = SyscallArgs::new(&regs);
         trace!("registers: {regs:?}");
+        trace!("args: {args:?}");
         match regs.orig_rax {
             0 => {
                 let read = tracee.parse_return(SyscallDisc::Read)?;
@@ -138,12 +139,18 @@ impl Syscall {
                 })
             }
             43 => {
-                let sock_addr = tracee.memcpy_struct::<sockaddr>(args.1)?;
+                let addrlen = if args.1 == 0 || args.2 == 0 {
+                    None
+                } else {
+                    let bytes = tracee.memcpy(args.2, std::mem::size_of::<socklen_t>())?;
+                    Some(socklen_t::from_ne_bytes(bytes.try_into().unwrap()))
+                };
                 tracee.parse_return(SyscallDisc::Accept)?;
+                let sock_addr = tracee.memcpy_struct::<sockaddr>(args.1)?;
                 Ok(Syscall::Accept {
                     sockfd: args.0 as i32,
-                    addr: sock_addr.unwrap().into(),
-                    addrlen: args.2 as socklen_t,
+                    addr: sock_addr.map(Into::into),
+                    addrlen 
                 })
             }
             49 => {
@@ -195,6 +202,8 @@ impl Syscall {
                 let argv = tracee.strcpy(args.1)?;
                 let envp = tracee.strcpy(args.2)?;
                 tracee.syscall()?;
+                // tracee.parse_return(SyscallDisc::Execve)?;
+                // Ok(Syscall::Execve { pathname,  argv, envp })
                 match tracee.wait_for_stop()? {
                     WaitEvents::Exec => {
                         tracee.parse_return(SyscallDisc::Execve)?;
@@ -281,8 +290,9 @@ pub struct SyscallIter(Tracee);
 
 impl SyscallIter {
     pub fn new(mut tracee: Tracee, opts: SyscallIterOpts) -> Result<Self, SyscallIterError> {
-        let mut options = Options::PTRACE_O_TRACESYSGOOD;
-        // | Options::PTRACE_O_TRACEEXEC
+        let mut options = Options::PTRACE_O_TRACESYSGOOD
+            // execve is more reliable with this
+        | Options::PTRACE_O_TRACEEXEC;
         // | Options::PTRACE_O_TRACEFORK
         // | Options::PTRACE_O_TRACECLONE;
         if opts.kill_on_exit {

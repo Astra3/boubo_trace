@@ -68,6 +68,7 @@ impl Tracee {
         }
     }
 
+    // TODO add a wait_for_syscall_stop type of method here, apply this for SIGTRAP
     pub fn wait_for_stop(&mut self) -> Result<WaitEvents, SyscallParseError> {
         match waitpid(self.pid, None) {
             Ok(WaitStatus::PtraceEvent(_, Signal::SIGTRAP, PTRACE_EVENT_EXEC)) => {
@@ -82,7 +83,14 @@ impl Tracee {
             }
             Ok(WaitStatus::PtraceSyscall(_)) => Ok(WaitEvents::Syscall),
             Ok(WaitStatus::Stopped(_, signal)) => {
+                trace!("tracee stopped on signal {signal:?}");
                 self.signal.store(signal);
+                // FIXME this is here to be able to run programs with fork in them
+                if signal == Signal::SIGCHLD {
+                    trace!("continuing on SIGCHLD");
+                    self.syscall()?;
+                    return self.wait_for_stop()
+                }
                 Ok(WaitEvents::Stopped(signal))
             }
             Ok(WaitStatus::Exited(_, exit_code)) => {
@@ -191,7 +199,7 @@ impl Tracee {
         trace!("exit regs: {:?}", ptrace::getregs(self.pid)?);
 
         let ret = self.read_rax()?;
-        trace!("return value: {ret}");
+        debug!("return value: {ret}");
         if ret < 0 {
             return Err(SyscallParseError::SyscallError {
                 syscall,

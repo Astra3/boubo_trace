@@ -19,8 +19,16 @@ snapshot_kind: text
                 116,
                 0,
             ],
-            flags: 578,
-            mode: 448,
+            flags: OFlagSer(
+                OFlag(
+                    O_CREAT | O_RDWR | O_TRUNC,
+                ),
+            ),
+            mode: ModeSer(
+                Mode(
+                    S_IRWXU,
+                ),
+            ),
         },
     ),
     Ok(

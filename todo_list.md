@@ -6,6 +6,7 @@
 - držet file descriptory
 - thready
 - stack unwinding
+- ignorovat některé argumenty pro snapshot testy
 
 # velké wtf momenty
 - clone v libc se chová jinak než syscall

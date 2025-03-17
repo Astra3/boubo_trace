@@ -1,0 +1,27 @@
+---
+source: tests/basic_syscall_trace.rs
+expression: called_syscalls
+input_file: test_programs/build/socket_open.exec
+snapshot_kind: text
+---
+[
+    Ok(
+        Socket {
+            domain: AddressFamilySer(
+                Inet,
+            ),
+            type: SocketType {
+                type: Datagram,
+                flags: SockFlag(
+                    SOCK_NONBLOCK | SOCK_CLOEXEC,
+                ),
+            },
+            protocol: 1,
+        },
+    ),
+    Ok(
+        ExitGroup {
+            status: 0,
+        },
+    ),
+]

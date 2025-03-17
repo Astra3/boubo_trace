@@ -1,0 +1,66 @@
+---
+source: tests/basic_syscall_trace.rs
+expression: called_syscalls
+input_file: test_programs/build/clone.exec
+snapshot_kind: text
+---
+[
+    Ok(
+        Write {
+            fd: 1,
+            buf: [
+                109,
+                97,
+                105,
+                110,
+                32,
+                116,
+                104,
+                114,
+                101,
+                97,
+                100,
+                10,
+            ],
+        },
+    ),
+    Ok(
+        Clone {
+            flags: 18874385,
+            stack: 0,
+            parent_tid: 0,
+            child_tid: 140728459507392,
+            tls: 0,
+        },
+    ),
+    Ok(
+        Write {
+            fd: 1,
+            buf: [
+                104,
+                101,
+                108,
+                108,
+                111,
+                32,
+                102,
+                114,
+                111,
+                109,
+                32,
+                99,
+                108,
+                111,
+                110,
+                101,
+                33,
+                10,
+            ],
+        },
+    ),
+    Ok(
+        ExitGroup {
+            status: 0,
+        },
+    ),
+]
