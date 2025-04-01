@@ -62,8 +62,8 @@ snapshot_kind: text
                     sockaddr {
                         sa_family: 2,
                         sa_data: [
-                            -124,
-                            -2,
+                            -84,
+                            -10,
                             127,
                             0,
                             0,

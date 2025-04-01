@@ -33,7 +33,6 @@ mod tests {
             let pid = Pid::from_raw(cmd.id() as i32);
 
             let it = SyscallIter::new(Tracee::new(pid), SyscallIterOpts::default());
-            // FIXME improve error serialize, if necessary
             let called_syscalls: Vec<_> = it
                 .unwrap()
                 .filter(|call| !matches!(call, Ok(Syscall::Unknown { .. })))

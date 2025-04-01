@@ -1,0 +1,191 @@
+# don't forget the docs: https://github.com/typst/hayagriva/blob/main/docs/file-format.md
+
+harry:
+  type: Book
+  title: Harry Potter and the Order of the Phoenix
+  author: Rowling, J. K.
+  volume: 5
+  page-total: 768
+  date: 2003-06-21
+
+hebrew-bible:
+  type: Book
+  title: Hebrew Bible
+  date: -799
+
+bible:
+  type: Book
+  title: Holman Christian Standard Bible
+  date: 2009
+
+house:
+  type: Book
+  title: "House of Leaves: The Remastered Full-Color Edition"
+  author: Danielewski, Mark Z.
+  edition: 2
+  date: 2000-03-07
+  publisher: Pantheon
+  serial-number:
+    isbn: 9780375703768
+
+wwdc-network:
+  type: Article
+  author: ["Mehta, Jiten", "Kinnear, Eric"]
+  title: Boost Performance and Security with Modern Networking
+  date: 2020-06-26
+  parent:
+    - type: Conference
+      title: World Wide Developer Conference 2020
+      organization: Apple Inc.
+      location: Mountain View, CA
+    - type: Video
+      runtime: "00:13:42"
+      url: https://developer.apple.com/videos/play/wwdc2020/10111/
+
+syscall:
+  type: web
+  title: syscall(2) - Linux manial page
+  url:
+    value: https://man7.org/linux/man-pages/man2/syscall.2.html
+    date: 2025-03-28
+
+fork:
+  type: web
+  title: fork(2) - Linux manual page
+  url:
+    value: https://man7.org/linux/man-pages/man2/fork.2.html
+    date: 2025-03-28
+
+ptrace:
+  type: web
+  title: ptrace(2) - Linux manual page
+  url:
+    value: https://man7.org/linux/man-pages/man2/ptrace.2.html
+    date: 2025-03-28
+
+process_vm:
+  type: web
+  title: process_vm_readv(2) - Linux manual page
+  url:
+    value: https://www.man7.org/linux/man-pages/man2/process_vm_readv.2.html
+    date: 2025-03-31
+
+iovec:
+  type: web
+  title: iovec(3type) - Linux manual page
+  url:
+    value: https://man7.org/linux/man-pages/man3/iovec.3type.html
+    date: 2025-03-31
+
+clone:
+  type: web
+  title: clone(2) - Linux manual page
+  url:
+    value: https://man7.org/linux/man-pages/man2/clone.2.html
+    date: 2025-03-28
+
+proc-pid-mem:
+  type: web
+  title: proc_pid_mem(5) - Linux manual page
+  url:
+    value: https://man7.org/linux/man-pages/man2/clone.2.html
+    date: 2025-03-31
+
+rustonomicon:
+  type: book
+  title: The Rustonomicon
+  url:
+    value: https://doc.rust-lang.org/nomicon/intro.html
+    date: 2025-03-31
+
+libc-rust:
+  type: web
+  title: libc - Rust
+  url:
+    value: https://docs.rs/libc/latest/libc/index.html
+    date: 2025-04-01
+
+nix-rust:
+  type: web
+  title: nix - Rust
+  url:
+    value: https://docs.rs/nix/latest/nix/index.html
+    date: 2025-04-01
+
+rust-astrophysics:
+  type: article
+  title: What can the programming language Rust do for astrophysics?
+  author:
+    - Blanco-Cuaresma, Sergi
+    - Bolmont, Emeline
+  serial-number:
+    doi: "10.1017/S1743921316013168"
+    issn: 1743-9213
+  date: 2017-05-30
+  publisher: Cambridge University Press
+  page-range: 341-344
+  abstract: "The astrophysics community uses different tools for computational tasks such as complex systems simulations, radiative transfer calculations or big data. Programming languages like Fortran, C or C++ are commonly present in these tools and, generally, the language choice was made based on the need for performance. However, this comes at a cost: safety. For instance, a common source of error is the access to invalid memory regions, which produces random execution behaviors and affects the scientific interpretation of the results.In 2015, Mozilla Research released the first stable version of a new programming language named Rust. Many features make this new language attractive for the scientific community, it is open source and it guarantees memory safety while offering zero-cost abstraction.We explore the advantages and drawbacks of Rust for astrophysics by re-implementing the fundamental parts of Mercury-T, a Fortran code that simulates the dynamical and tidal evolution of multi-planet systems."
+  url: https://www.cambridge.org/core/product/B51B6DF72B7641F2352C05A502F3D881
+  parent:
+    - type: periodical
+      title: Proceedings of the International Astronomical Union
+      issue: S325
+      volume: 12
+
+rust-book:
+  type: book
+  title: The Rust Programming Language
+  edition: 2
+  author:
+    - Klabnik, Steve
+    - Nichols, Carol
+  date: 2022-12
+  serial-number:
+    isbn: 9781718503106
+  page-total: 560
+  publisher: No Starch Press
+  url: https://doc.rust-lang.org/stable/book/title-page.html
+
+
+trnka-thesis:
+  type: thesis
+  genre: Bakalářská práce
+  author: Trnka, Daniel
+  title: Sledování běžících aplikací
+  publisher:
+    name: Vysoká škola Báňská - Technická univerzita Ostrava
+    location: Ostrava
+  url: http://hdl.handle.net/10084/118986
+  abstract: "Cílem této bakalářské práce je návrh a implementace prototypu nástroje, který sleduje aplikace v operačním systému Linux. V rámci sledování jsou zaznamenávány vnější projevy aplikace jako vytvoření procesu či vláken, zápis a čtení ze souborů, síťová komunikace a namapované stránky. Výsledný záznam je možné následně vizualizovat. V rámci textu jsou dále rozebrány možnosti, jak je možné sledování aplikací implementovat"
+  date: 2017
+
+tanenbaum-operating:
+  type: book
+  title: 'Operating systems: design and implementation: [the {MINIX} book]'
+  author:
+    - Tanenbaum, Andrew S.
+    - Woodhull, Albert
+  date: 2009
+  publisher: Pearson Prentice Hall
+  location: Upper Saddle River, NJ
+  edition: 3. ed., Pearson international ed
+  serial-number:
+    isbn: 9780135053768 9780131429871
+  parent:
+    type: book
+    title: Pearson education international
+
+intel-volume3: &intel
+  type: reference
+  author:
+  - Intel
+  date: 2002
+  title: 'Intel® 64 and IA-32 Architectures Software Developer’s Manual: System Programming Guide'
+  volume: 3 (3A, 3B, 3C & 3D)
+  serial-number: 325384-078US
+
+halting:
+  type: Web
+  title: Halting problem --- Wikipedia, The Free Encyclopedia
+  year: 2024-05-31
+  url: https://en.wikipedia.org/w/index.php?title=Halting_problem&oldid=1226634338
