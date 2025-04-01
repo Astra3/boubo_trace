@@ -137,8 +137,7 @@ impl App {
         if let Some(path) = &self.args.output {
             let v: Vec<SyscallWrapper> = called_syscalls.into_iter().map(From::from).collect();
             if path == "-" {
-                // serde_json::to_writer(&io::stdout(), &v)?;
-                self.serialize_json(&io::stdout(), &v)?;
+                self.serialize_json(io::stdout().lock(), &v)?;
             } else {
                 let file = match File::create(path) {
                     Ok(file) => file,
@@ -147,6 +146,7 @@ impl App {
                         return Err(err.into());
                     }
                 };
+                // TODO bufwriter
                 match self.serialize_json(&file, &v) {
                     Ok(file) => file,
                     Err(err) => {

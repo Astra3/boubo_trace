@@ -1,0 +1,3 @@
+[submodule "thesis_template"]
+	path = thesis_text/thesis_template
+	url = git@github.com:Astra3/Typst-thesis-template-for-VSB.git

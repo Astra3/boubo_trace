@@ -1,4 +1,3 @@
-- výpis na disk
 - parsovat sockaddr
 - benchmarking traceru (hyperfine)
 
@@ -20,9 +19,36 @@
 - Chromium se ukončilo se SIGSEGV, což způsobilo nekonečný loop, proces byl pak neustále pokračován do SIGSEGV
 
 
+# struktura práce
+- úvod, popis proč a jak
+  - debug symboly
+- koncepty
+  - operační systém
+  - syscally
+    - ptrace
+      - tracer a tracee
+    - process_vm_readv
+- existující řešení
+  - gdb/lldb
+  - strace
+  - intentrace
+- použité technologie
+  - rust
+  - nix crate
+- architektura
+  - uhhh tohle bude složité, možná stojí za skip?
+- implementace
+  - popsání kódu
+  - skip_to_main funkcionalita, vysvětlení memory maps
+- otestování
+  - funguje to poměrně bezchybně
+  - vysoká rychlost
+  - funkcionalita je nic moc
+- závěr, shrnutí všeho dohromady
+
 # vyzdvihnout
-- interface s iterátorem
-- funkčnost s tracingem jednoho threadu
-- dobrá rozšířitelnost na původní plán
+  - interface s iterátorem
+  - funkčnost s tracingem jednoho threadu
+    - dobrá rozšířitelnost na původní plán
 - dobrá rychlost (doložit benchmarky)
 
