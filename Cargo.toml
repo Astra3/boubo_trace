@@ -1,7 +1,9 @@
 [package]
-name = "tracer"
+name = "boubo_trace"
+authors = ["Roman Táborský"]
+description = "Tool to trace and save syscalls from specified program"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "GPL-3.0-or-later"
 
 [dependencies]
