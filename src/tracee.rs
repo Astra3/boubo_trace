@@ -130,7 +130,6 @@ impl Tracee {
         Ok(Some(sock_addr[0]))
     }
 
-    // FIXME does this actually work?
     pub fn memcpy_until<T>(&self, base: usize, function: T) -> ErrnoResult<Vec<u8>>
     where
         T: Fn(&u8) -> bool,

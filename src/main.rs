@@ -1,6 +1,6 @@
 use std::{
     fs::{canonicalize, File},
-    io::{self},
+    io::{self, BufWriter},
     path::PathBuf,
     process::Command,
 };
@@ -10,7 +10,7 @@ use log::{debug, error, info, LevelFilter};
 use nix::unistd::Pid;
 use serde::Serialize;
 use spawn_ptrace::CommandPtraceSpawn;
-use tracer::{
+use boubo_trace::{
     syscall::{Syscall, SyscallIter, SyscallIterOpts, SyscallParseError},
     tracee::Tracee,
 };
@@ -147,7 +147,8 @@ impl App {
                     }
                 };
                 // TODO bufwriter
-                match self.serialize_json(&file, &v) {
+                let file = BufWriter::new(file);
+                match self.serialize_json(file, &v) {
                     Ok(file) => file,
                     Err(err) => {
                         error!("could not write to file at path: {path}");
