@@ -1,95 +1,118 @@
 # don't forget the docs: https://github.com/typst/hayagriva/blob/main/docs/file-format.md
 
-harry:
-  type: Book
-  title: Harry Potter and the Order of the Phoenix
-  author: Rowling, J. K.
-  volume: 5
-  page-total: 768
-  date: 2003-06-21
-
-hebrew-bible:
-  type: Book
-  title: Hebrew Bible
-  date: -799
-
-bible:
-  type: Book
-  title: Holman Christian Standard Bible
-  date: 2009
-
-house:
-  type: Book
-  title: "House of Leaves: The Remastered Full-Color Edition"
-  author: Danielewski, Mark Z.
-  edition: 2
-  date: 2000-03-07
-  publisher: Pantheon
-  serial-number:
-    isbn: 9780375703768
-
-wwdc-network:
-  type: Article
-  author: ["Mehta, Jiten", "Kinnear, Eric"]
-  title: Boost Performance and Security with Modern Networking
-  date: 2020-06-26
-  parent:
-    - type: Conference
-      title: World Wide Developer Conference 2020
-      organization: Apple Inc.
-      location: Mountain View, CA
-    - type: Video
-      runtime: "00:13:42"
-      url: https://developer.apple.com/videos/play/wwdc2020/10111/
-
 syscall:
-  type: web
-  title: syscall(2) - Linux manial page
+  type: reference
+  title: syscall(2) - Linux manual page
   url:
     value: https://man7.org/linux/man-pages/man2/syscall.2.html
     date: 2025-03-28
 
 fork:
-  type: web
+  type: reference
   title: fork(2) - Linux manual page
   url:
     value: https://man7.org/linux/man-pages/man2/fork.2.html
     date: 2025-03-28
 
 ptrace:
-  type: web
+  type: reference
   title: ptrace(2) - Linux manual page
   url:
     value: https://man7.org/linux/man-pages/man2/ptrace.2.html
     date: 2025-03-28
 
 process_vm:
-  type: web
+  type: reference
   title: process_vm_readv(2) - Linux manual page
   url:
     value: https://www.man7.org/linux/man-pages/man2/process_vm_readv.2.html
     date: 2025-03-31
 
+execve:
+  type: reference
+  title: execve(2) - Linux manual page
+  url:
+    value: https://www.man7.org/linux/man-pages/man2/execve.2.html
+    date: 2025-04-14
+
+elf:
+  type: reference
+  title: elf(5) - Linux manual page
+  url:
+    value: https://www.man7.org/linux/man-pages/man5/elf.5.html
+    date: 2025-04-14
+
 iovec:
-  type: web
+  type: reference
   title: iovec(3type) - Linux manual page
   url:
     value: https://man7.org/linux/man-pages/man3/iovec.3type.html
     date: 2025-03-31
 
+linux-unicode:
+  type: reference
+  title: Unicode support — The Linux Kernel documentation
+  url:
+    value: https://www.kernel.org/doc/html/latest/admin-guide/unicode.html
+    date: 2025-04-14
+
+strace:
+  type: reference
+  title: strace(1) - Linux manual page
+  url:
+    value: https://www.man7.org/linux/man-pages/man1/strace.1.html
+    date: 2025-04-14
+
+write:
+  type: reference
+  title: write(2) - Linux manual page
+  url:
+    value: https://man7.org/linux/man-pages/man2/write.2.html
+    date: 2025-04-14
+
+open:
+  type: reference
+  title: open(2) - Linux manual page
+  url:
+    value: https://man7.org/linux/man-pages/man2/open.2.html
+    date: 2025-04-14
+
+errno:
+  type: reference
+  title: errno(3) - Linux manual page
+  url:
+    value: https://man7.org/linux/man-pages/man3/errno.3.html
+    date: 2025-04-14
+
 clone:
-  type: web
+  type: reference
   title: clone(2) - Linux manual page
   url:
     value: https://man7.org/linux/man-pages/man2/clone.2.html
     date: 2025-03-28
 
+signal:
+  type: reference
+  title: signal(7) - Linux manual page
+  url:
+    value: https://www.man7.org/linux/man-pages/man7/signal.7.html
+    date: 2025-04-15
+
 proc-pid-mem:
-  type: web
+  type: reference
   title: proc_pid_mem(5) - Linux manual page
   url:
     value: https://man7.org/linux/man-pages/man2/clone.2.html
     date: 2025-03-31
+
+flags-beauty:
+  type: blog
+  author: Erz, Hendrik
+  date: 2011
+  title: Bitwise Flags are Beautiful, and Here’s Why
+  url:
+    value: https://www.hendrik-erz.de/post/bitwise-flags-are-beautiful-and-heres-why
+    date: 2025-04-14
 
 rustonomicon:
   type: book
@@ -98,19 +121,33 @@ rustonomicon:
     value: https://doc.rust-lang.org/nomicon/intro.html
     date: 2025-03-31
 
+command-rust:
+  type: reference
+  title: Command in std::process - Rust
+  url:
+    value: https://doc.rust-lang.org/std/process/struct.Command.html
+    date: 2025-04-14
+
 libc-rust:
-  type: web
+  type: reference
   title: libc - Rust
   url:
     value: https://docs.rs/libc/latest/libc/index.html
     date: 2025-04-01
 
 nix-rust:
-  type: web
+  type: reference
   title: nix - Rust
   url:
     value: https://docs.rs/nix/latest/nix/index.html
     date: 2025-04-01
+
+serde-derive:
+  type: reference
+  title: Using derive · Serde
+  url:
+    value: https://serde.rs/derive.html
+    date: 2025-04-16
 
 rust-astrophysics:
   type: article
@@ -175,17 +212,27 @@ tanenbaum-operating:
     type: book
     title: Pearson education international
 
-intel-volume3: &intel
+intel-volume3:
   type: reference
-  author:
-  - Intel
-  date: 2002
+  author: Intel
+  date: 2022-12
   title: 'Intel® 64 and IA-32 Architectures Software Developer’s Manual: System Programming Guide'
   volume: 3 (3A, 3B, 3C & 3D)
   serial-number: 325384-078US
 
-halting:
-  type: Web
-  title: Halting problem --- Wikipedia, The Free Encyclopedia
-  year: 2024-05-31
-  url: https://en.wikipedia.org/w/index.php?title=Halting_problem&oldid=1226634338
+intel-volume2:
+  type: reference
+  author: Intel
+  date: 2022-12
+  title: 'Intel® 64 and IA-32 Architectures Software Developer’s Manual: Instruction Set Reference, A-Z'
+  volume: 2 (2A, 2B, 2C & 2D)
+  serial-number: 325383-078US
+
+intel-volume1:
+  type: reference
+  author: Intel
+  date: 2022-12
+  title: 'Intel® 64 and IA-32 Architectures Software Developer’s Manual: Basic Architecture'
+  volume: 1
+  serial-number: 253665-078US
+

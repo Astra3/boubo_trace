@@ -1,0 +1,19 @@
+flowchart TD
+    start([Začátek načítání])
+    end_success([Řetězec kompletně načten])
+    end_error([Řetězec neúplně načten])
+    start --> create_vec[Vytvoř vektor *data*]
+    create_vec --> is_loaded{{Byl dosažen limit načtených bajtů?}}
+
+    is_loaded -- ne --> load[/Načti úsek dat/]
+    load --> has_zero{{Obsahuje načtený úsek ukončovací znak?}}
+    has_zero -- ano --> add_upto[Přidej do vektoru *data* načtený úsek po a včetně ukončovacího znaku]
+    add_upto --> end_success
+
+    has_zero -- ne --> add_data[Přidej do vektoru *data* načtený úsek]
+    add_data --> touched_invalid{{Bylo provedeno čtení mimo platnou paměť?}}
+    touched_invalid -- ano --> end_error
+    touched_invalid -- ne --> is_loaded
+
+    is_loaded -- ano --> end_error
+

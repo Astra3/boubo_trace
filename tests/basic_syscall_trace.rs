@@ -7,7 +7,7 @@ mod tests {
         unistd::Pid
     ;
     use spawn_ptrace::CommandPtraceSpawn;
-    use tracer::{syscall::{Syscall, SyscallIter, SyscallIterOpts, SyscallParseError}, tracee::Tracee};
+    use boubo_trace::{syscall::{Syscall, SyscallIter, SyscallIterOpts, SyscallParseError}, tracee::Tracee};
     static INIT: Once = Once::new();
 
     fn initialize() {
@@ -26,7 +26,7 @@ mod tests {
         initialize();
         glob!("../test_programs/build/", "*.exec", |exec| {
             println!("path: {}", exec.display());
-            let cmd = Command::new(exec)
+            let mut cmd = Command::new(exec)
                 .current_dir(exec.parent().unwrap())
                 .spawn_ptrace()
                 .unwrap();
@@ -39,6 +39,7 @@ mod tests {
                 .take_while(|call| !matches!(call, Err(SyscallParseError::ProcessExit(_))))
                 .collect();
             insta::assert_debug_snapshot!(called_syscalls);
+            cmd.wait().unwrap();
         });
     }
 }
