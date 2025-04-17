@@ -98,11 +98,18 @@ signal:
     value: https://www.man7.org/linux/man-pages/man7/signal.7.html
     date: 2025-04-15
 
+proc-pid-exe:
+  type: reference
+  title: proc_pid_exe(5) - Linux manual page
+  url:
+    value: https://www.man7.org/linux/man-pages/man5/proc_pid_exe.5.html
+    date: 2025-04-16
+
 proc-pid-mem:
   type: reference
   title: proc_pid_mem(5) - Linux manual page
   url:
-    value: https://man7.org/linux/man-pages/man2/clone.2.html
+    value: https://www.man7.org/linux/man-pages/man5/proc_pid_mem.5.html
     date: 2025-03-31
 
 flags-beauty:
