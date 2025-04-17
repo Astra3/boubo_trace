@@ -9,9 +9,7 @@ use nix::{
     errno::Errno,
     fcntl,
     sys::{
-        ptrace::Options,
-        socket::{self},
-        stat,
+        ptrace::Options, signal::Signal, socket::{self}, stat
     },
 };
 pub use parse_error::SyscallParseError;
@@ -313,7 +311,7 @@ impl SyscallIter {
 
             tracee.cont()?;
             match tracee.wait_for_stop() {
-                Ok(WaitEvents::Stopped(_)) => {
+                Ok(WaitEvents::Stopped(Signal::SIGTRAP)) => {
                     trace!("stopped on main");
                     // decrementing RIP
                     let rip = tracee.read_user((RIP * 8) as usize)? as usize;
