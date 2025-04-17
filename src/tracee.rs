@@ -180,8 +180,16 @@ impl Tracee {
         ptrace::read(self.pid, addr as *mut c_void)
     }
 
+    pub fn read_user(&self, addr: usize) -> ErrnoResult<c_long> {
+        ptrace::read_user(self.pid, addr as *mut c_void)
+    }
+
     pub fn write(&self, addr: usize, data: c_long) -> ErrnoResult<()> {
         ptrace::write(self.pid, addr as *mut c_void, data)
+    }
+
+    pub fn write_user(&self, addr: usize, data: c_long) -> ErrnoResult<()> {
+        ptrace::write_user(self.pid, addr as *mut c_void, data)
     }
 
     pub fn setoptions(&self, options: ptrace::Options) -> ErrnoResult<()> {

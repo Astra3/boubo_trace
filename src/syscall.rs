@@ -2,7 +2,7 @@ use core::str;
 use std::io;
 
 use elf::{endian::AnyEndian, ElfBytes};
-use libc::{sockaddr, socklen_t};
+use libc::{sockaddr, socklen_t, RIP};
 use log::{debug, error, trace, warn};
 use new_types::{sockaddr_ser, AddressFamilySer, ModeSer, OFlagSer, SocketType};
 use nix::{
@@ -304,8 +304,8 @@ impl SyscallIter {
             let elf = ElfBytes::<AnyEndian>::minimal_parse(file.as_slice()).unwrap();
             let entry_point = elf.ehdr.e_entry;
 
-            debug!("creating breakpoint on main()");
             let main_address = tracee.translate_address(entry_point as usize)?.unwrap();
+            debug!("creating breakpoint on main() at address {main_address:#X}");
             let original_word = tracee.read(main_address)?;
             trace!("original word: {original_word:#X}");
             // this isn't gonna be compatible outside of x86
@@ -315,6 +315,9 @@ impl SyscallIter {
             match tracee.wait_for_stop() {
                 Ok(WaitEvents::Stopped(_)) => {
                     trace!("stopped on main");
+                    // decrementing RIP
+                    let rip = tracee.read_user((RIP * 8) as usize)? as usize;
+                    tracee.write_user((RIP * 8) as usize, (rip - 1) as i64)?;
                     tracee.write(main_address, original_word)?;
                 }
                 _ => panic!(),
