@@ -98,6 +98,13 @@ signal:
     value: https://www.man7.org/linux/man-pages/man7/signal.7.html
     date: 2025-04-15
 
+proc:
+  type: reference
+  title: proc(5) - Linux manual page
+  url:
+    value: https://www.man7.org/linux/man-pages/man5/proc.5.html
+    date: 2025-04-24
+
 proc-pid-exe:
   type: reference
   title: proc_pid_exe(5) - Linux manual page
@@ -112,14 +119,39 @@ proc-pid-mem:
     value: https://www.man7.org/linux/man-pages/man5/proc_pid_mem.5.html
     date: 2025-03-31
 
+elf-diagram:
+  type: artwork
+  author: Albertini, Ange
+  date: 2013
+  title: ELF 101 a Linux executable walkthrough
+  url:
+    value: https://github.com/corkami/pics/blob/669facbb0b6a977f959ae6473b8346e98cf23f53/binary/elf101/64.svg
+
+breakpoints:
+  type: article
+  title: "Debugger flow control: Hardware breakpoints vs software breakpoints"
+  date: 2006-11-07
+  author: Johnson, Ken
+  url:
+    value: http://www.nynaeve.net/?p=80
+    date: 2025-04-22
+  parent:
+    type: blog
+    title: Nynaeve
+    author: Johnson, Ken
+    url: http://www.nynaeve.net/
+
 flags-beauty:
-  type: blog
+  type: article
   author: Erz, Hendrik
   date: 2011
   title: Bitwise Flags are Beautiful, and Here’s Why
   url:
     value: https://www.hendrik-erz.de/post/bitwise-flags-are-beautiful-and-heres-why
     date: 2025-04-14
+  parent:
+    type: blog
+    author: Erz, Hendrik
 
 rustonomicon:
   type: book
@@ -202,6 +234,20 @@ trnka-thesis:
   url: http://hdl.handle.net/10084/118986
   abstract: "Cílem této bakalářské práce je návrh a implementace prototypu nástroje, který sleduje aplikace v operačním systému Linux. V rámci sledování jsou zaznamenávány vnější projevy aplikace jako vytvoření procesu či vláken, zápis a čtení ze souborů, síťová komunikace a namapované stránky. Výsledný záznam je možné následně vizualizovat. V rámci textu jsou dále rozebrány možnosti, jak je možné sledování aplikací implementovat"
   date: 2017
+
+core-dumped-process:
+  type: video
+  title: The Most Successful Idea in Computer Science
+  author: Core Dumped
+  url: https://www.youtube.com/watch?v=LDhoD4IVElk
+  date: 2024-09-25
+
+core-dumped-kernel-mode:
+  type: video
+  title: How a Single Bit Inside Your Processor Shields Your Operating System's Integrity
+  author: Core Dumped
+  url: https://www.youtube.com/watch?v=H4SDPLiUnv4
+  date: 2024-10-17
 
 tanenbaum-operating:
   type: book

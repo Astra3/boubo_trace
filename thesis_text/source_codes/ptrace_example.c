@@ -16,7 +16,7 @@ int main() {
     // čekáme, než se potomek zastaví
     waitpid(pid, &status, 0);
     if (!WIFSTOPPED(status)) { return 1; }
-    // pokračujeme exekuci potomka
+    // pokračujeme s vykonáváním potomka
     ptrace(PTRACE_CONT, pid, NULL, NULL);
     // počkáme, než potomek skončí
     wait(NULL);

@@ -1,0 +1,7 @@
++++ zde jsem vynechal 29 systémových volání +++
+232784 openat - open the file: test.txt (create the file if it does not exist)truncate the file's length to zero |=> successfully opened file
+232784 write - write 13 Bytes into the file: 3 -> /build/test.txt |=> wrote all 13 Bytes
+232784 close - close the file: 3 -> /build/test.txt |=> file closed
+232784 exit_group - exit all threads in the group with status: 0 |=> 
+
+  232784  EXITED 
