@@ -25,8 +25,10 @@
 # struktura práce
 - úvod, popis proč a jak
   - debug symboly
+- návrh
+  - f
 - koncepty
-  - operační systém
+  - procesy v linuxu
   - syscally
     - ptrace
       - tracer a tracee
