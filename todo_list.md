@@ -49,6 +49,8 @@
 - evaluace
   - funguje to poměrně bezchybně
   - vysoká rychlost
+    - iperf3
+    - darktable-cli export
   - funkcionalita je nic moc
 - závěr, shrnutí všeho dohromady
 
