@@ -1,0 +1,8 @@
+flowchart TD
+  start_rest([Žádost o restartování sledovaného])
+  start_rest --> is_signal{{Je uložený nějaký signál?}}
+  is_signal -- ne --> end_rest([Sledovaný restartován])
+
+  is_signal -- ano --> save_signal[Ulož si dočasně uložený signál]
+  save_signal --> clear_signal[Vymaž uložený signál]
+  clear_signal --> end_rest_signal([Sledovaný restartován s dočasně uloženým signálem])

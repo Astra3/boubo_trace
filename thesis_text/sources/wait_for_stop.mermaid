@@ -1,0 +1,16 @@
+flowchart TD
+  start_wait([Metoda wait_for_stop zavolána])
+  start_wait --> waiting[Čekání na zastavení sledovaného]
+  waiting --> has_signal{{Byl sledovaný zastaven signálem?}}
+  
+  has_signal -- ne --> end_wait([Vrácení zastaveného stavu])
+  has_signal -- ano --> is_sigtrap{{Je signál SIGTRAP?}}
+  is_sigtrap -- ano --> end_wait
+
+  is_sigtrap -- ne<br>nadcházející podmínka je zde pro kompatibilitu s fork --> is_sigchld{{Je signál SIGCHLD?}}
+  is_sigchld -- ne --> store_signal[Ulož signál pro pozdější použití]
+  store_signal --> end_wait
+
+  is_sigchld -- ano --> call_syscall[Zavolej PTRACE_SYSCALL operaci pro ukončení fork]
+  call_syscall --> call_wait[Zavolej wait_for_stop]
+  call_wait --> end_rec_wait([Vrácení výsledku volání])

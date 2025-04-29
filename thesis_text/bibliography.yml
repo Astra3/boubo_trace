@@ -119,6 +119,25 @@ proc-pid-mem:
     value: https://www.man7.org/linux/man-pages/man5/proc_pid_mem.5.html
     date: 2025-03-31
 
+
+ptrace-abi:
+  type: repository
+  title: Linux kernel source tree
+  edition: 6.15-rc3
+  editor: Torvalds, Linus
+  url:
+    value: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/uapi/asm/ptrace-abi.h?h=v6.15-rc3
+    date: 2025-04-27
+
+user64:
+  type: repository
+  title: Linux kernel source tree
+  edition: 6.15-rc3
+  editor: Torvalds, Linus
+  url:
+    value: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/user_64.h?h=v6.15-rc3
+    date: 2025-04-27
+
 elf-diagram:
   type: artwork
   author: Albertini, Ange
@@ -127,6 +146,38 @@ elf-diagram:
   url:
     value: https://github.com/corkami/pics/blob/669facbb0b6a977f959ae6473b8346e98cf23f53/binary/elf101/64.svg
 
+gnu-gpl:
+  title: GNU General Public License
+  type: legislation
+  edition: 3
+  publisher:
+    name: Free Software Foundation
+    location: Boston
+  date: 2007-06-29
+  url: https://www.gnu.org/licenses/gpl-3.0.en.html
+
+little-book-of-stress:
+  type: book
+  title: The Little Book of Stress
+  author: Candappa, Rohan
+  date: 1998
+  publisher: Ebury Press
+  serial-number:
+    isbn: 9780091865856
+json:
+  type: entry
+  title: The JavaScript Object Notation (JSON) Data Interchange Format
+  editor: Bray, Timothy William
+  serial-number:
+    issn: 2070-1721
+    doi: 10.17487/RFC8259
+    rfc: 8259
+  url: https://www.rfc-editor.org/info/rfc8259
+  date: 2017-12
+  abstract: "JavaScript Object Notation (JSON) is a lightweight, text-based, language-independent data interchange format. It was derived from the ECMAScript Programming Language Standard. JSON defines a small set of formatting rules for the portable representation of structured data. This document removes inconsistencies with other specifications of JSON, repairs specification errors, and offers experience-based interoperability guidance."
+  parent:
+    title: STD 90
+    url: https://www.rfc-editor.org/info/std90
 breakpoints:
   type: article
   title: "Debugger flow control: Hardware breakpoints vs software breakpoints"
@@ -152,6 +203,13 @@ flags-beauty:
   parent:
     type: blog
     author: Erz, Hendrik
+
+insta-rs:
+  type: web
+  title: Insta Snapshots
+  url:
+    value: https://insta.rs/
+    date: 2025-04-27
 
 rustonomicon:
   type: book

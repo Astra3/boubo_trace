@@ -68,12 +68,13 @@ Optional params:
 
 
 // Thesis assignment page
-// TODO doplnit zadání
-
-#temp.assignmentHeading
-
 
 #pagebreak()
+#set page(background: image("sources/zadání/zadání-1.svg"))
+#pagebreak()
+#set page(background: image("sources/zadání/zadání-2.svg"))
+#pagebreak()
+#set page(background: none)
 /*
 All of the abstracts. Abstract should take about 10 lines.
 1. Czech abstract
@@ -82,6 +83,8 @@ All of the abstracts. Abstract should take about 10 lines.
 4. English keywords
 5. Acknowledgment, if any
 */
+#show quote: set align(center)
+#show quote: set pad(x: 18%)
 #temp.abstracts(
   [
     Tato bakalářská práce se zabývá návrhem a implementací prototypu nástroje, který sleduje programy v operačním systému Linux. Výsledný záznam je možné uložit do souboru. V textu práce jsou také popsaný základní koncepty sledování procesů a systémových volání. Práce také obsahuje evaluaci výsledné implementace a možnosti její rozšíření do budoucna.
@@ -98,14 +101,16 @@ All of the abstracts. Abstract should take about 10 lines.
   // and get insanely creative with it
   quote: quote(
     [
-      TODO něco z nějaké malé knihy, house of leaves nebo od linuse torvaldse
+      #smallcaps[Don't stop]
+
+      If you're not getting anywhere with a task that is becoming increasingly frustrating, don't stop. \
+      On no account walk away from it. \
+      Research shows that the more stressed you are the more likely you are to solve the problem.
     ],
-    attribution: [
-      eventuálně...
-    ],
+    attribution: [Rohan Candappa @little-book-of-stress],
     block: true,
   ),
-  acknowledgment: [TODO ty basic věci sem],
+  acknowledgment: [Chtěl bych poděkovat mému vedoucímu, Ing. Jakubu Beránkovi, za pomoc a rady při tvorbě práce.],
   // In case you need to set custom abstract spacing
   // abstractSpacing: 2.5cm,
 )
@@ -117,8 +122,8 @@ All of the abstracts. Abstract should take about 10 lines.
 
 // Uncomment this if you don't want chapter title in headers
 // headerHeadingPage sets if a header should be shown on a page starting with header
-#show: temp.headerChapters.with(headerHeadingPage: false)
 #temp.listChapters()
+#show: temp.headerChapters.with(headerHeadingPage: false)
 
 
 // List of symbols and abbreviations, automatically alphabetically sorted
@@ -140,6 +145,8 @@ All of the abstracts. Abstract should take about 10 lines.
   ("GP", "General Purpose"),
   ("CS", "Code Segment"),
   ("MSR", "Model Specific Register"),
+  ("MIT", "Massachusetts Institute of Technology"),
+  ("GPL", "GNU General Public License"),
 )
 
 // List of Figures
@@ -158,7 +165,10 @@ All of the abstracts. Abstract should take about 10 lines.
 #show: temp.start_heading_numbering
 
 #let argument_list(..content) = {
-  show grid.cell.where(x: 0): it => align(strong(raw(it.body.text, block: false)), it.align)
+  show grid.cell.where(x: 0): it => align(
+    strong(raw(it.body.text, block: false)),
+    it.align,
+  )
   set par(leading: .8em)
   grid(
     columns: (auto, auto),
@@ -169,17 +179,18 @@ All of the abstracts. Abstract should take about 10 lines.
 }
 
 // Start of your text
+#set table(align: left + horizon)
 
 // TODO delší úvod
-= Úvod
+= Úvod <intro>
 Při psaní programů, ať už v jakémkoliv paradigmatu nebo jazyce, každý programátor eventuálně řeší nějaký logický problém v programu. Tyhle problémy sahají od tlačítka, které z nějakého důvodu nic nedělá, až po finančně několika miliardové chyby. Pro zabránění, pochopení a prevenci těchto problémů byla vytvořena řada nástrojů a postupů. I přes jejich nepřeberné množství je stále možné najít nějakou nevyplněnou díru, postup nebo nástroj, který ještě nebyl vytvořen a správně vyzkoušen.
 
-Sledování a pochopení fungování velkých programů vyžaduje velké úsilí a proces pochopení složitého programu trvá velice dlouho a dokáže být extrémně náročný. Cílem práce je tedy navrhnout a implementovat nástroj nástroj a pochopit principy, jež by ulehčily analýzu programů, které prostě a jednoduše dělají až moc věcí. Kvůli potencionální složitosti takového řešení se v této práci podíváme pouze na základní kameny takového nástroje, nicméně jsem otevřen tento nástroj do budoucna dále rozvíjet.
+Sledování a pochopení fungování velkých programů vyžaduje velké úsilí a proces pochopení složitého programu trvá velice dlouho a dokáže být extrémně náročný. Cílem práce je tedy navrhnout a implementovat nástroj nástroj a pochopit principy, jež by ulehčily analýzu programů, které prostě a jednoduše dělají až moc věcí.
 
 V úvodních kapitolách se podíváme na principy zejména z operačních systémů, od popisu systémových volání až po `ptrace`. Následně si ukážeme existující nástroje a jejich dobré a chybějící vlastnosti relevantní pro větší programy. Po těchto základních věcech se dostaneme konečně k samotné implementaci nástroje BouboTrace a její evaluaci a na závěr si všechno shrneme.
 
 = Principy operačního systému Linux
-Než se dostaneme k tomu, jak vlastně vůbec zjistit chování nějakého programu, musíme se nejdříve podívat na základy operačního systému Linux. Právě na něm jsem prováděl pak i veškerou další implementaci.
+Než se dostaneme k tomu, jak vlastně vůbec zjistit chování nějakého programu, musíme se nejdříve podívat na základy operačního systému Linux, na kterém jsem prováděl následující implementaci. Podíváme se zejména na systémové volání, jejichž sledování umožňuje sledovat chování procesu. Rovněž nám umožní samotný proces vůbec sledovat. Před nimi se taky ještě něco dozvíme o procesech, jelikož jejich pochopení je klíčové pro pochopení následujícího sledování.
 
 == Procesy
 Každý spustitelný software, který je spuštěný v #abbr.a[OS] Linux, se navýzá proces. Procesy jsou uloženy ve stromu, každý proces má jednoho rodiče (kromě procesu `init`, který je kořenem) a může mít několik dětí. Každý proces je taky označený unikátním číslem, kterému se říká #abbr.a[PID].
@@ -195,23 +206,25 @@ Každý proces nebo vlákno může obdržet od kernelu nebo jiného procesu něj
 
 #figure(
   table(
-    columns: (auto, auto),
-    align: left,
+    columns: (auto, 1fr),
     [*Signál*], [*Popis*],
     [`SIGSEGV`], [Proces provedl neplatný přístup do paměti],
     [`SIGKILL`], [Proces byl vynuceně ukončen],
     [`SIGSTOP`], [Proces byl zastaven],
-    [`SIGTRAP`], [CPU vyvolalo během spouštění procesu breakpoint nebo debug trap],
+    [`SIGTRAP`],
+    [CPU vyvolalo během spouštění procesu breakpoint nebo debug trap],
+
     [`SIGILL`], [Proces se pokusil spustit neplatnou instrukci],
+    [`SIGCHLD`], [Potomek byl restartován nebo ukončen],
   ),
-  caption: [Přehled některých signálů v Linuxu @signal]
+  caption: [Přehled některých signálů v Linuxu @signal],
 ) <signal-overview>
 
 Každý signál má nějakou výchozí akci, kterou učiní. `SIGSEGV` terminuje proces a vytvoří core dump, `SIGTRAP` zastaví proces atd. Procesy mohou signály ignorovat, odložit a také spustit i speciální funkci, nazývanou jako signal handler (kdy proces odchytí daný signál). Jediné signály, které nejde ignorovat, odložit a odcyhtit jsou `SIGKILL`, kdy vždy dojde k ukončení procesu, a `SIGSTOP`, kdy vždy dojde k zastavení procesu. @signal
 
 
 == Systémové volání <syscalls>
-Moderní operační systémy izolují procesy v nich běžící od přímého přístupu k hardware. K tomu, aby proces mohl získat nějaká data z hardware, požádá o ně operační systém přes systémové volání. Způsob spouštění a předávání argumentů systémových volání se liší podle #abbr.a[OS] a podle architektury #abbr.a[CPU], #footnote[V případě x86-64 se k tomu dá použít instrukce `SYSCALL`. Parametry jsou předávány přes #abbr.a[CPU] registry. @intel-volume3[kap. 5.8.8] @syscall] nicméně ve valné většině případů existují knihovní procedury pro jazyk C (pro Linux se tato knihovna jmenuje `libc`) umožňující volat systémové volání. @tanenbaum-operating[kap. 1.6] Ve @write-example[Výpisu] lze vidět, jak můžeme využít jazyk C k použití systémového volání `write` k výpisu na standardní výstup.
+Moderní operační systémy izolují procesy v nich běžící od přímého přístupu k hardware. K tomu, aby proces mohl získat nějaká data z hardware, požádá o ně operační systém přes systémové volání. Způsob spouštění a předávání argumentů systémových volání se liší podle #abbr.a[OS] a podle architektury #abbr.a[CPU], #footnote[V případě x86-64 se k tomu dá použít instrukce `SYSCALL`. Parametry jsou předávány přes #abbr.a[CPU] registry. @intel-volume3[kap. 5.8.8] @syscall] nicméně ve valné většině případů existují knihovní procedury pro jazyk C (pro Linux se tato knihovna jmenuje `libc`) umožňující volat systémové volání. @tanenbaum-operating[kap. 1.6] Ve @write-example[Výpisu] lze vidět, jak můžeme využít jazyk C k použití systémového volání `write` k výpisu na standardní výstup. Z hlediska #abbr.a[OS] žádá proces pouze o spuštění systémového volání (ne o jaké volání), proto každé systémové volání má i své číslo, díky kterému kernel ví, o jaké volání proces požádal. Jak je tohle číslo prakticky předáno popisuji dále v této kapitole.
 
 #figure(
   raw(read("source_codes/write_example.c"), block: true, lang: "C"),
@@ -225,8 +238,7 @@ Pro účely této práce jsou taky skvělým způsobem, jak zjistit, co nějaký
 Parametry knihovní procedury se ne vždy shodují s parametry systémového volání. V případě systémového volání `clone` jsou parametry mezi procedurou a reálným voláním jiné; liší se i mezi #abbr.a[CPU] architekturami. @clone Název procedury také nemusí odpovídat systémovému volání, který procedura volá. V příadě procedury `fork` se volá volání `clone`, i když `fork` má stejnojmenné systémové volání. @fork
 
 ==== Způsob spouštění systémových volání na x86-64
-// TODO doplnit citaci na používanost
-x86-64 je instrukční sada a architektura procesorů, vyvíjená primárně společnostmi Intel a AMD a využívaná na valné většině počítačů a notebooků. Je to taky ta, na které běží můj počítač a dále se v práci budu bavit pouze o ní, pokud nezmíním jinak.
+x86-64 je instrukční sada a architektura procesorů, vyvíjená primárně společnostmi Intel a AMD a využívaná na většině počítačů a notebooků. Je to taky ta, na které běží můj počítač a dále se v práci budu bavit pouze o ní, pokud nezmíním jinak.
 
 Každý procesor obsahuje několik registrů, které sahají od #abbr.a[GP] registrů až po EFLAGS. S každým typem registrů se manipuluje jinak, #abbr.a[GP] registry jsou zapisovatelné přímo programem, segmentové registry může zapsat pouze kernel (v #abbr.a[CPL] 0). @intel-volume1[kap. 3.4] @intel-volume3[kap. 5.9] Jedním speciálním typem registru je registr RIP, který je známý také jako čítač instrukcí (anglicky program counter nebo instruction pointer), který obsahuje posun od počáteční adresy a po každé vykonané instrukci se přesouvá o délku této instrukce na začátek další instrukce. @intel-volume1[kap. 3.5.1]
 
@@ -261,19 +273,27 @@ Návratová hodnota záleží na `op`, některé operace vrací vyžádaná data
 
 Proces, který používá `ptrace` na jiný proces (tzn. že zadává jeho #abbr.a[PID] do `pid` parametru) se nazývá "tracer" (sledovatel) a proces, který je sledován sledovatelem se nazývá "tracee" (sledovaný). Pojmy "sledovatel" a "sledovaný" budou nadále používány v práci. Ve většině konfiguracích, aby sledovatel mohl monitorovat sledovaný proces, musí sledovaný nejprve zavolat `ptrace(PTRACE_TRACEME)` a musí být potomkem sledovatele. #footnote[Podmínky pro sledování procesu se můžou měnit dle systému a konfigurace. Na některých systémech nelze `ptrace` použít vůbec, na jiných může jít sledovat průběh jakéhokoliv procesu, i pokud není potomkem. @ptrace]
 
-Aby sledovatel mohl monitorovat sledovaný proces, musí sledovaný nejprve zavolat `ptrace(PTRACE_TRACEME)` a musí být potomkem sledovatele. #footnote[Tohle není nutně vždy pravda. `ptrace` má nastavitelné přístupové módy a můžou být jak více volné, tak i více limitující až kompletně zakázaný. @ptrace]
+Aby sledovatel mohl monitorovat sledovaný proces, musí sledovaný nejprve zavolat `ptrace(PTRACE_TRACEME)` a musí být potomkem sledovatele. #footnote[Tohle není nutně vždy pravda. `ptrace` má nastavitelné přístupové módy a můžou být jak více volné, tak i více limitující až kompletně zakázané. @ptrace]
 
 #figure(
   table(
-    columns: (auto, auto),
-    align: left,
+    columns: (auto, 1fr),
     [*Operace*], [*Popis*],
-    [`PTRACE_GETREGS`], [Uloží do ukazatele v parametru `data` hodnotu #abbr.a[CPU] registrů.],
+    [`PTRACE_GETREGS`],
+    [Uloží do ukazatele v parametru `data` hodnotu #abbr.a[CPU] registrů.],
+
     [`PTRACE_POKETEXT`], [Přečte jedno slovo z paměti sledovaného.],
-    [`PTRACE_POKEUSER`], [Přečte slovo z USER regionu paměti sledovaného. Více v @breakpoint-creation[Kapitole].],
-    [`PTRACE_TRACEME`], [Operace, kterou sledovaný umožňuje sledujícímu sledovat jeho proces.],
+    [`PTRACE_POKEUSER`],
+    [Přečte slovo z USER regionu paměti sledovaného. Více v @breakpoint-creation[Kapitole].],
+
+    [`PTRACE_TRACEME`],
+    [Operace, kterou sledovaný umožňuje sledujícímu sledovat jeho proces.],
+
     [`PTRACE_SETOPTIONS`], [Umožňuje nastavit různé chování `ptrace`.],
-  )
+    [`PTRACE_SYSCALL`],
+    [Zastaví sledovaného na vstupu do systémového volání (po instrukci `SYSCALL`) a při výstupu z něj (před instrukcí `SYSRET`).],
+  ),
+  caption: [Ukázka některých `ptrace` operací relevantních pro práci]
 ) <ptrace-operations>
 
 ==== Příklad inicializace `ptrace` <ptrace-example-chapter>
@@ -293,14 +313,18 @@ Pokud sledovaný obdrží nějaký signál, tento signál mu nikdy není doruče
 
 #figure(
   table(
-    columns: (auto, auto),
-    align: left,
+    columns: (auto, 1fr),
     [*Nastavení*], [*Popis*],
-    [`PTRACE_O_TRACEEXEC`], [Informuje sledovatele o tom, že sledovaný zavolal `execve`],
-    [`PTRACE_O_TRACEFORK`], [Informuje sledovatele o tom, že sledovaný zavolal `fork`],
-    [`PTRACE_O_EXITKILL`], [Ukončí sledovaného, pokud sledovatel ukončí svůj běh]
+    [`PTRACE_O_TRACEEXEC`],
+    [Informuje sledovatele o tom, že sledovaný zavolal `execve`],
+
+    [`PTRACE_O_TRACEFORK`],
+    [Informuje sledovatele o tom, že sledovaný zavolal `fork`],
+
+    [`PTRACE_O_EXITKILL`],
+    [Ukončí sledovaného, pokud sledovatel ukončí svůj běh],
   ),
-  caption: [Popis možností v `ptrace`]
+  caption: [Popis možností v `ptrace`],
 ) <ptrace-options-table>
 
 === Systémové volání `process_vm_readv` a `process_vm_writev` <process-vm-chapter>
@@ -346,10 +370,112 @@ Definice procedury `process_vm_readv` je popsána ve @process-vm-readv[Výpisu].
 
 Pokud se během kopírování naplní jedno `iov_base` pole v `local_iov`, přejde se na další v pořadí i pokud jsme pořád ve stejném poli v `remote_iov`. Jinými slovy, jedno pole v `remote_iov` může naplnit dvě pole v `local_iov` a opačně. V návratové hodnotě je celkový počet zkopírovaných bytů. Pokud `remote_iov` přesáhne do neplatné paměti, celé kopírování okamžitě skončí a systémové volání vrátí počet zkopírovaných bytů do té doby. Tohle použití je velice relevantní pro implementaci v této práci a je více rozebráno v @syscall-loading[Kapitole].
 
+// TODO dopsat
+// jaký problém se řeší, jakou by měl mít funkcionalitu (serializace, bezchybnost a rychlost), čím je to složité a jak bude vypadat architektura řešení, naznačit, že to má být knihovna
+
+// tak měl byste napsat, co je cílem toho toolu, bez ohledu na ostatní podobné tooly. tj. sledovat chování Linuxových procesů. umožnit sledovat podprocesy, vytváření a otevírání souborů, zápis a čtení souborů včetně zapsaných/přečtených dat, to samé se sockety atd.
+//
+// pak napsat, jak ta aplikace bude fungovat, že bude využívat ptrace, že bude dělat breakpointy pro filtrování věcí před mainem, že bude strukturovaná jako knihovna + aplikace, a jakým způsobem bude data ukládat na disk
+= Návrh nástroje BouboTrace
+V rámci této práce jsem implementoval aplikaci BouboTrace. #footnote[Název pochází z latinského názvu pro výra velkého, _Bubo bubo_, jelikož sovy neustále sledují prostředí kolem nich.] Nástroj BouboTrace by měl:
+- Umět trasovat systémové volání sledovaného a zaměřit se zejména na volání, které _ovlivňují vnější svět_, tedy pracují se soubory, sockety atd. (sledovat volání `ptrace` není pro nás až tolik podstatné pro chování, jako třeba `write`)
+  - Zpracovat parametry systémových volání, tj. nevypsat jenom hodnoty registrů při vstupu, ale i příznaky, řetězce aj.
+  - Umět sledovat i potomky a vlákna sledovaného
+  - Zpracovat chybu vrácenou ze systémového volání
+  - Mít limit na velikost načtených parametrů
+- Být rychlý
+- Neovlivnit běh a chování sledovaného
+- Být rozdělený na aplikační a knihovní kód, kdy knihovní kód provádí trasování a aplikační #abbr.a[CLI] nad knihovním kódem
+- Mít testy na otestování korektnosti chování
+- Umožnit serializaci přečtených systémových volání ve strojově čitelném formátu a její výpis na disk
+
+BouboTrace je, dle požadavků, rozdělený na knihovní a aplikační kód. Aplikační kód, spuštěný z CLI, nejprve spustí program sledovaného na zadané cestě s předanými argumenty. Poté aplikaci spustí a předá knihovnímu kódu, který postupně spouští systémové volání a předává informace o nich do aplikačního kódu. Jakmile sledovaný skončí, dojde v aplikačním kódu k zápisu na disk. Proces běhu zobrazuje @architecture-plot.
+
+BouboTrace je vydán pod #abbr.a[GPL] licencí. Balíčky používané v něm by byly kompatibilní i s více volnou licencí (třeba #abbr.a[MIT]), nicméně chci zajistit, že zdrojový kód k nástroji bude vždy dostupný. @gnu-gpl
+
+#figure(
+  image("sources/architecture.svg"),
+  caption: [Diagram interakce knihovního a aplikačního kódu během běhu programu],
+) <architecture-plot>
+
+== Použití
+Před použitím je potřeba provést instalaci, například podle návodu v @run-boubotrace[Appendixu]. Po ní je nástroj BouboTrace k dispozici přes nástroj Cargo anebo přímo sestavený v příslušné složce. @usage-examples ukazuje příklady použití #abbr.a[CLI] na nástroji `ls`, z GNU coreutils. BouboTrace automaticky přeskakuje do začátku funkce `main`, všechny volání na propojení knihoven před kódem v aplikaci jsou přeskočeny. Pro vypnutí tohoto chování se dá použít parametr `--no-skip-to-main`. Více do podrobna je tohle chování popsano v @skip-to-main[Kapitole].
+
+#figure(
+  ```sh
+  # spuštění s výpisem serializace do konzole
+  boubo_trace -o - /usr/bin/ls
+  # spuštění s logováním různých ladících informací a systémových volání
+  boubo_trace -vvv /usr/bin/ls
+  # spuštění s výpisem serializace do souboru out.json
+  boubo_trace -o out.json /usr/bin/ls
+  # změna pracovního adresáře sledovaného a výpisu serializace
+  boubo_trace -w work_dir -o - /usr/bin/ls
+  # předání parametru folder do sledovaného
+  boubo_trace -vvv /usr/bin/ls folder
+  ```,
+  caption: [Příklady použití #abbr.a[CLI] parametrů v BouboTrace],
+) <usage-examples>
+
+== Podporované systémové volání <implemented-syscalls>
+BouboTrace umí korektně načíst minimálně následující systémové volání: `openat`, `read`, `write`, `close`, `socket`, `bind`, `listen`, `accept` a `exit_group`. U těchto volání jsou uloženy jména, podstatné hodnoty v parametrech, parametry s načtenou pamětí a návratová hodnota. U všech ostatních volání je uloženo jejich číslo, všechny možné registry s parametry a návratová hodnota. @syscall-load-difference znázorňuje rozdíl ve čtení mezi podporovaném a nepodporovaném systémovém volání, kde volání `openat` je plně podporované a jsou načteny jeho parametry, druhé volání (tady se jedná o `munmap`) pak není podporované a je pouze načteno jeho ID, registry s možnými parametry a návratová hodnota.
+
+#figure(
+  ```rust
+  Unknown { id: 11, args: SyscallArgs(129295288074240, 237451, 129295288569856, 140728277551152, 0, 129295288562432), return_value: 0 }
+
+  Openat { dirfd: -100, pathname: [116, 101, 115, 116, 46, 116, 120, 116, 0], flags: OFlagSer(OFlag(O_CREAT | O_RDWR | O_TRUNC)
+  ```,
+  caption: [Rozdíl mezi podporovaném a nepodporovaném systémovém volání],
+) <syscall-load-difference>
+
+Specifické volání jsem v implementaci prioritizoval, protože se jedná o často volané volání, které hrají roli pro sledování chování programu. `read` a `write` slouží ke všeobecnému zápisu, `socket`, `bind` a `listen` jsou určené na sockety a zejména komunikaci po síti a nakonec je zde `exit_group`, kterým každý program musí končit. Přidat implementaci pro chybějící volání už není tak složité, jelikož základní struktura pro čtení parametrů je už ve struktuře `Tracee`, více probrané v @tracee-struct[Kapitole]. Nejsložitější je zpravidla čtení příznaků a případně obstarat speciální chování nějakého volání.
+
+== Formát dat
+Aplikace umí ukládat výsledky sledování do formátu #abbr.a[JSON]. Tento formát jsem zvolil, protože je jednoduše lidsky i strojově čitelný a nabízí všechny potřebné primitivní datové typy, včetně i objektů a polí. @json Struktura #abbr.a[JSON]u z BouboTrace je pole, které obsahuje objekt pro každé systémové volání v pořadí, ve kterém byly volané. V příkladu poskytnutém ve @final-json[Výpisu] bylo nejprve voláno volání nějaké nepodporované volání, poté `openat`, pak `close`, pak `exit_group` a nakonec knihovní kód vrátil _chybu_, kdy informoval o ukončení sledovaného.
+
+#figure(
+  ```json
+  [
+    {
+      "unknown": {
+        "id": 11,
+        "args": [130974528835584, 238443, 130974529335296, 140730202855200, 0,
+                 130974529327872],
+        "return_value": 0
+      }
+    },
+    {
+      "openat": {
+        "dirfd": -100,
+        "pathname": [116, 101, 115, 116, 46, 116, 120, 116, 0],
+        "flags": 578,
+        "mode": 448
+      }
+    },
+    {
+      "close": {
+        "fd": 3
+      }
+    },
+    {
+      "exit_group": {
+        "status": 0
+      }
+    },
+    {
+      "syscall_error": "tracee process is not running and exited with status code 0"
+    }
+  ]
+  ```,
+  caption: [Podoba serializovaného #abbr.a[JSON]],
+) <final-json>
+
+
 = Programovací jazyk Rust
 Pro implementaci programu v práci jsem se rozhodl pro jazyk Rust. Jedná se o paměťově bezpečný nízkoúrovňový systémový jazyk, který klade důraz na výkon, paralelní zpracování a typovou bezpečnost. Nepoužívá žádnou formu automatické správy paměti; místo toho používá "borrow checker," který kontroluje platnost referencí a dobu jejich života během překladu. Všechny proměnné jsou také ve výchozím stavu "non-mutable" tzn. že nelze přepsat jejich obsah. Půjčuje si hodně vzorů z funkcionálních jazyků, nicméně objevuje se v něm i pár konceptů z OOP. Jazyk je paměťově bezpečný, je tudíž garantováno, že nedojde během běhu programu k #abbr.a[UB] (zápis mimo platnou paměť, čtení z nulového ukazatele apod.). Výjimku v tomto tvoří `unsafe` bloky, které v jazyce existují, protože ne všechno v nízkoúrovňovém programování může být paměťově bezpečné. @rust-book
 
-Jazyk Rust používá systém Cargo pro správu závislostí, testů, parametrů překladu, verze programu a mnoho dalšího. Jedním z konceptů v Cargo je "crate" (dále balíček) jedná se o nějaký modul, který je dostupný lokálně nebo z internetu a jakmile je přidaný do současného projektu, je možné importovat jeho veřejné členy v současném projektu. Tyto balíčky pak lze sdílet na #link("https://crates.io/")[`crates.io`] a díky tomu jednoduše používat v jiných projektech jako závislosti. @rust-book[kap. 7] 
+Jazyk Rust používá systém Cargo pro správu závislostí, testů, parametrů překladu, verze programu a mnoho dalšího. Jedním z konceptů v Cargo je "crate" (dále balíček) jedná se o nějaký modul, který je dostupný lokálně nebo z internetu a jakmile je přidaný do současného projektu, je možné importovat jeho veřejné členy v současném projektu. Tyto balíčky pak lze sdílet na #link("https://crates.io/")[`crates.io`] a díky tomu jednoduše používat v jiných projektech jako závislosti. @rust-book[kap. 7]
 
 Rust rovněž umožňuje propojení s jinými nízkoúrovňovými programovacími jazyky za pomocí #abbr.a[FFI]. Je tedy možné poměrně jednoduše volat funkce z jazyků C nebo C++. Všechny funkce definované přes #abbr.a[FFI] jsou ve výchozím stavu unsafe, nicméně lze kolem nich udělat bezpečné rozhraní, jak je tomu ve @ffi-example[Výpisu]. @rustonomicon[kap. 11]
 
@@ -373,7 +499,7 @@ Balíček `libc` obsahuje všechny #abbr.a[FFI] definice pro systémová volán�
   caption: [Porovnání systémového volání `write` mezi `nix` a `libc`. @libc-rust @nix-rust],
 ) <write-difference>
 
-Pro všechny přímé systémové volání jsem v práci byl využil balíček `nix`. Některé potencionálně užitečné definice struktur a systémových volání v něm někdy nejsou nadefinované, #footnote[Příkladem zde je operace `PTRACE_GET_SYSCALL_INFO`. Je dostupná v `libc`, ale v `nix` zatím nebyla implementována. Je o tom již dlouhodobě aktivní PR: https://github.com/nix-rust/nix/pull/2006.] nicméně dá se bez nich většinou obejít a případně je zavolat nebo importovat z `libc`.
+Pro všechny přímé systémové volání jsem v práci byl využil balíček `nix`. Některé potencionálně užitečné definice struktur a systémových volání v něm někdy nejsou nadefinované, #footnote[Příkladem zde je operace `PTRACE_GET_SYSCALL_INFO`. Je dostupná v `libc`, ale v `nix` zatím nebyla implementována. O jeho přidání již dlouhodobě aktivní PR: https://github.com/nix-rust/nix/pull/2006.] nicméně dá se bez nich většinou obejít a případně je zavolat nebo importovat z `libc`.
 
 
 = Existující alternativy <existing-solutions>
@@ -399,85 +525,29 @@ intentrace #footnote[https://github.com/sectordistrict/intentrace] je nástroj v
 
 #figure(
   raw(read("sources/intentrace_output.txt"), block: true),
-  caption: [Výpis programu ve @open-example[Výpisu] v nástroji `intentrace`, s odstraněnými ANSI kódy]
+  caption: [Výpis programu ve @open-example[Výpisu] v nástroji `intentrace`, s odstraněnými ANSI kódy],
 ) <intentrace-output>
 
 
 == Krokování pomocí ladícího nástroje
 Krokování je běžným způsobem diagnostiky chyb chování programu. Umožňuje nám postupně procházet určitě části programu a dívat se, co je s nimi špatně nebo dobře. Problém krokování je, že umí nakreslit pouze části do puzzle chování programu, nikoliv celé puzzle. Skládání puzzle je už na programátorovi. Tento postup funguje, když má puzzle 100 dílků; když jich má 50~000, nefunguje už tak moc dobře.
 
-// TODO dopsat
-= Návrh
-
-= Implementace nástroje BouboTrace <implementation>
+= Implementace BouboTrace <implementation>
 V této kapitole se nejprve podíváme na strukturu kódu v BouboTrace a poté si něco řekneme o věcech, které byly dokončeny a jaké problémy to obnášelo. V celé kapitole se probírá pouze x86-64 instrukční sada a architektura, pokud není zmíněno jinak.
-
-== Struktura BouboTrace
-BouboTrace obsahuje několik komponent, které dohromady tvoří celý nástroj. Program je rozdělený na knihovní a aplikační kód, kdy knihovní kód se stará o čtení systémových volání a aplikační kód o spuštění sledovaného programu a #abbr.a[CLI].
-
-=== Rozhraní pro práci s knihovním kódem
-První jsem se musel rozmyslet nad smysluplným rozhraním, které by dokázalo vhodně reprezentovat jedno systémové volání. V jazyce Rust jsou velice oblíbené iterátory, které velice vhodně reprezentují nějakou sekvenci dat. Původní navrhované rozhraní pro program lze vidět ve @first-interface[Výpisu].
-
-#figure(
-  ```rust
-  for syscall: Syscall in tracee.run() {
-      if let Syscall:Write(_, _, bytes) = syscall {
-          println!("called write with {bytes:?}");
-      }
-  }
-  ```,
-  caption: [Představované původní rozhraní pro (uživatelský) kód spustitelného souboru.],
-) <first-interface>
-
-Ze začátku tento postup fungoval skvěle, nicméně eventuálně jsem narazil na problém chyb; uživatel by měl být informován o chybách, knihovní kód by si je neměl nechávat pro sebe. Mezi možné chyby patří nějaká chyba z `ptrace` (např. když je daný region paměti uzamknut, proces s daným #abbr.a[PID] neexistuje atd.), ale i chyba ze systémového volání (více popsáno v @syscall-errors[Kapitole]). Jako chyby jsou předávány i různé události (třeba ukončení procesu). Finální typ iterátoru je tedy `Result<Syscall, SyscallParseError>`, uživatel je tak informován o všech chybách a událostech. Příklad finálního čtení iterátoru je ukázán ve @final-interface[Výpisu].
-#figure(
-  ```rust
-  for syscall in tracee.run() {
-      match syscall {
-          Ok(syscall) => println!("received syscall: {syscall:?}"),
-          Err(syscall_error) => println!("an error occurred: {syscall_error}"),
-      }
-  }
-  ```,
-  caption: [Finální rozhraní uživatelského kódu],
-) <final-interface>
-
-// FIXME přesunout nejspíš trochu níž
-=== Struktura `Tracee` <tracee-struct>
-Struktura `Tracee` představuje obal nad `ptrace` rozhraním z balíčku `nix`. Je to z toho důvodu, že některé složitější operace v `ptrace` jsou poměrně časté, chtěl jsem nad nimi tedy nějaký obal, abych pro jejich úpravu nemusel měnit kód na několika místech. `Tracee` rovněž enkapsuluje #abbr.a[PID] sledovaného, nelze tedy přečíst ze zbytku knihovního kódu a všechny `ptrace` operace musí proběhnout přes metody `Tracee`.
-
-`Tracee` obsahuje jak jednoduché metody (např. `read`, `write`, `read_rax` atd.), tak i složitější metody s náročnější logikou. Jednou z nich je třeba `memcpy_until`, která za pomocí `process_vm_readv` systémového volání kopíruje paměť ze sledovaného do sledovatele a každém bytu této kopírované paměti spouští předanou anonymní funkci. Pokud ta vrátí hodnotu `true`, tak je kopírování ukončeno. Mezi další metody patří třeba `strcpy`, která obaluje `memcpy_until`, dokud není načtený celý C řetězec. Podrobnější popis fungování těchto metod je poskytnut v @syscall-loading[Kapitole].
-
-Nakonec jsou zde i metody na `wait_for_stop`, `cont` a `syscall`. V @ptrace-syscall[Kapitole] bylo popsáno, že signály jsou vždy doručené sledovateli a nikoliv sledovanému. Je čistě na sledovateli (tedy nás), co s daným signálem dělat. Všechny doručené signály jsou doručené v `waitpid` systémovém volání, které je volané ve `wait_for_stop` metodě. Pokud je tedy sledovaný zastaven na nějakém signálu, je tento signál uložen ve struktuře a poté předán sledovanému při volání `cont` nebo `syscall` metody. Výjimku tvoří SIGKILL, jelikož ten kernel doručuje přímo sledovanému @ptrace a SIGTRAP, který signalizuje trap signál z #abbr.a[CPU] a je používaný pro nastavení breakpointu. Více je tohle rozebrané v @breakpoint-creation[Kapitole].
-
-=== Enum `Syscall`
-Enum `Syscall`  obstarává načítání všech implementovaných systémových volání. Obsahuje metodu `parse`, která vezme referenci na strukturu `Tracee`, na které byla zavolána metoda `syscall` a čeká, až se zastaví na vstupu do systémového volání. Poté načte všechny parametry systémové volání (čísla, řetězce, příznaky, pole, apod.), zavolá `syscall` metodu a poté přečte návratovou hodnotu.
-
-Pokud během čtení dojde k nějaké chybě, ať už z `ptrace` nebo z návratové hodnoty systémového volání, vrátí metoda `parse` chybu ve formě typu `SyscallParseError`. Tento typ umožňuje zahrnout hromadu chyb a stavů, od chyby `ptrace` přes ukončení sledovaného až po chybu systémového volání. Je to taky typ, který je vrácen v iterátoru. Pokud čtení proběhne úspěšně, vrátí metoda instanci enumu `Syscall`, který obsahuje přečtené systémové volání.
-
-=== Aplikační kód
-Aplikační kód BouboTrace zahrnuje způsob, jak spustit sledovaného a taky #abbr.a[CLI]. Pro čtení parametrů z příkazové řádky jsem použil balíček `clap`, který umožňuje velice jednoduše číst argumenty v příkazovém řádku do struktur. Po přečtení parametrů, které zahrnují například úroveň logování, název spouštěného programu, jeho pracující složku a různé další věci, dojde ke spuštění sledovaného. Jak bylo zmíněno v @ptrace-example-chapter[Kapitole], pro inicializaci `ptrace` je potřeba, aby dítě zavolalo `PTRACE_TRACEME` operaci. Sledující musí tedy provést následující kroky:
-
-+ Zavolat `fork` (nebo `clone`) a tím vytvořit kopii sama sebe.
-+ V rodiči počkat na zastavení dítěte.
-+ V dítěti zavolat `PTRACE_TRACEME` operaci.
-+ V dítěti zavolat `execve` systémové volání, které nahradí daný program s programem zadaném v argumentu volání. Ve zkratce _nahradí_ současný program za jiný.
-
-Jazyk Rust obsahuje ve standardní knihovně strukturu `Command`, která umožňuje spustit program jako dítě současného programu. Disponuje i unsafe metodou `pre_exec`, která obsahuje anonymní funkci, která se spustí v dítěti před samotným programem. Povedlo se mi nicméně najít balíček `spawn_ptrace`, #footnote[https://docs.rs/spawn-ptrace/latest/spawn_ptrace/] který celý tento proces dokáže automatizovat a chybově ošetřit.
 
 == Čtení systémových volání
 `ptrace` systémové volání, diskutované v @ptrace-syscall[Kapitole], obsahuje operaci `PTRACE_SYSCALL`. Tato operace zastaví sledovaného vždy při vstupu a výstupu ze systémového volání. Vzhledem k tomu, že nás primárně zajímají jenom systémová volání, je tato operace ideální, jelikož nabízí nejmenší komplexitu.
 
-Sledovaný je zastaven vždy po volání systémového volání a pokud je poté restartován opět s `PTRACE_SYSCALL` operací, tak je opět zastaven těsně před východem ze volání. V prvním případě můžeme přečíst argumenty předané do systémového volání a jaké systémové volání proběhlo, #footnote[RAX obsahuje číslo systémového volání, když sledovaný volá `SYSCALL`; neobsahuje ho během systémového volání. Kernel nicméně ukládá původní hodnotu v `orig_rax` hodnotě v USER části paměti. Více o USER části v @breakpoint-creation[Kapitole].] v druhém případě návratovou hodnotu volání.
+Sledovaný je zastaven vždy po volání systémového volání a pokud je poté restartován opět s `PTRACE_SYSCALL` operací, tak je opět zastaven těsně před východem ze volání. V prvním případě můžeme přečíst argumenty předané do systémového volání a jaké systémové volání proběhlo, v druhém případě návratovou hodnotu volání. Jak jsem zmínil v @syscalls kapitole, pro obě tyto hodnoty se používá registr RAX. Problémem je, že při vstupu do systémového volání po `SYSCALL` instrukci a před aktivací `PTRACE_SYSCALL` může dojít k přepisu registru RAX a tudíž ke ztrátě čísla systémového volání. Kernel nicméně číslo volání uloží před přepisem do `orig_rax` hodnotě v USER části paměti. Více o USER části v @breakpoint-creation[Kapitole].
 
-V x86-64 architektuře jsou parametry systémového volání předávané přes registry. @syscall Koncept kódu pro čtení parametrů a návratových hodnot všech systémových volání se nachází ve @ptrace-concept[Výpisu]. Proces operací je následující:
+Pro připomenutí, v x86-64 architektuře jsou parametry systémového volání předávané přes registry. @syscall Koncept kódu pro čtení parametrů a návratových hodnot všech systémových volání se nachází ve @ptrace-concept[Výpisu]. Proces operací je následující:
 
 + Zavoláme `PTRACE_SYSCALL` operaci na #abbr.a[PID] sledovaného
 + Počkáme, než se sledovaný dostane do zastaveného stavu
 + Přečteme parametry systémového volání z uživatelského regionu paměti sledovaného #footnote[`ptrace` k tomuhle nabízí `PTRACE_GETREGS` operaci, nicméně lze i číst z USER regionu paměti, jelikož tam jsou registry uloženy vždy při výměně procesu na #abbr.a[CPU].]
 + Opět zavoláme `PTRACE_SYSCALL`
 + Počkáme, než se sledovaný opět zastaví
-+ Přečteme z uživatelského regionu (více rozebrané v @breakpoint-creation) paměti hodnotu registru RAX
++ Přečteme z uživatelského regionu (více rozebrané v @breakpoint-creation) paměti hodnotu registru RAX (z `orig_rax` hodnoty)
 + Pokračujeme se spouštěním sledovaného
 
 #figure(
@@ -494,7 +564,7 @@ V x86-64 architektuře jsou parametry systémového volání předávané přes 
   caption: [Koncept čtení parametrů a návratové hodnoty systémového volání],
 ) <ptrace-concept>
 
-V úplně stejném principu je sledování systémových volání implementované v práci, v souboru `syscall.rs`. Čtení parametrů systémových volání nicméně není vždy tak jednoduché a vyžaduje trochu zpracování navíc.
+V úplně stejném principu je sledování systémových volání implementované v práci, v souboru `syscall.rs`. Čtení parametrů systémových volání nicméně není vždy tak jednoduché a vyžaduje trochu zpracování navíc a je dále probrané v @syscall-loading[Kapitole].
 
 
 === Chyby v systémových volání <syscall-errors>
@@ -564,7 +634,6 @@ Binární příznaky (bitwise flags) jsou čísla, kde hodnota jednoho bitu zna�
 #figure(
   table(
     columns: (auto, auto, auto),
-    align: left + horizon,
     table.header(
       [*Název příznaku*],
       [*Dvojková hodnota příznaku* #footnote[Jedná se o hodnotu příznaku na mém systému; může se lišit podle architektur]],
@@ -572,7 +641,10 @@ Binární příznaky (bitwise flags) jsou čísla, kde hodnota jednoho bitu zna�
     ),
 
     [`O_CREAT`], [`0001000000`], [Vytvoří soubor, pokud neexistuje],
-    [`O_TRUNC`], [`1000000000`], [Pokud soubor existuje, vymaže při otevření veškerý jeho obsah],
+    [`O_TRUNC`],
+    [`1000000000`],
+    [Pokud soubor existuje, vymaže při otevření veškerý jeho obsah],
+
     [`O_WRONLY`], [`0000000001`], [Otevře soubor pouze pro zápis],
   ),
   caption: [Popis příznaků použitých ve @openat-flags[Výpisu] @open],
@@ -595,90 +667,142 @@ Balíček `nix` používá vlastní implementaci balíčku `bitflags`. #footnote
   if type(it.dest) != str { it } else { emph(it) }
 }
 
-== Spuštění ve vstupním bodu <skip-to-main>
-Při psaní v nízkoúrovňových jazycích používáme zpravidla funkci `main` jako první věc, která se v programu spustí. Při překladu a linkování programu dochází k vytvoření souboru ve formátu ELF, který obsahuje jak přeložený kód, tak i nějaké informace k němu.
+== Struktura kódu v BouboTrace
+BouboTrace obsahuje několik komponent, které dohromady tvoří celý nástroj. Program je rozdělený na knihovní a aplikační kód, kdy knihovní kód se stará o čtení systémových volání a aplikační kód o spuštění sledovaného programu a #abbr.a[CLI].
 
-Pro spuštění programu se v Linuxu používá systémové volání `execve`. Jako první parametr přijímá cestu k souboru (zpravidla v ELF formátu #footnote[`execve` umožňuje volat přímo interpretry pro jazyky, které to vyžadují. Pokud třeba soubor, který začíná s `#!/usr/bin/bash` je předán do `execve`, je místo souboru přímo spuštěn `/usr/bin/bash` s cestou k souboru jako první argument.]). Pokud tento soubor vyžaduje dynamické linkování, je zavolaný interpreter pro načtení sdílených objektů (zpravidla `ld-linux.so`). @execve A tím je konečně vysvětlený můj problém s nástrojem `strace`, vysvětlený dávno v @strace-solution[Kapitole]. Jako první systémové volání ihned po `PTRACE_TRACEME` operaci bývá `execve` samotného programu a poté, pokud ELF závisí na dynamických knihovnách, dochází k dynamickému linkování, během kterého dojde k několika systémovým voláním. Až po tomhle všem dorazí sledovaný do funkce `main`.
+=== Struktura `Tracee` <tracee-struct>
+Struktura `Tracee` představuje obal nad `ptrace` rozhraním z balíčku `nix`. Je to z toho důvodu, že některé složitější operace v `ptrace` jsou poměrně časté, chtěl jsem nad nimi tedy nějaký obal, abych pro jejich úpravu nemusel měnit kód na několika místech. `Tracee` rovněž enkapsuluje #abbr.a[PID] sledovaného, nelze tedy přečíst ze zbytku knihovního kódu a všechny `ptrace` operace musí proběhnout přes metody `Tracee`.
 
-Formát ELF obsahuje několik sekcí, @elf-diagram kdy každá z nich obsahuje nějaké informace o programu. Pro nás největší význam tvoří položka `e_entry` (dále jako vstupní adresa), která se nachází v hlavičce ELF souboru. Tato položka značí adresu ve virtuální paměti,
-#footnote[V tomto kontextu je virtuální paměť paměť relativní k danému ELF souboru, s tím, že adresa `0x0` odkazuje na start ELF souboru. @elf V praxi přístup k této adrese je složitější, více o tom v @memory-maps[Kapitole].]
-která značí počátek instrukcí (kódu) v ELF souboru. @elf Pokud tedy program spustíme, necháme běžet, zastavíme ve vstupní adrese a až poté budeme sledovat systémové volání, přeskočíme tím všechny volání způsobené dynamickým linkováním.
-
-Pro načtení vstupní adresy v jazyce Rust jsem použil balíček `elf`. #footnote[https://docs.rs/elf/latest/elf/] Do něj stačí předat ELF soubor, který můžeme najít přes `procfs` v souboru `exe` a provést minimální čtení ELF souboru. @proc-pid-exe Minimální čtení umožňuje přečíst obsah hlavičky, ve které se vstupní adresa nachází.
-
-=== Vytvoření breakpointu <breakpoint-creation>
-Většina programátorů zná breakpoint jako řádek v kódu, kde se jejich program zastaví a oni mohou přečíst hodnoty proměnných za běhu. Pro účely jejich vytvoření musíme použít nicméně více konkrétní definici; breakpoint je v paměti sledovaného adresa, kam když dojde čítač instrukcí, tak sledovaný obdrží (zpravidla) SIGTRAP signál a je zastaven. Jak bylo zmíněno v @ptrace-syscall[Kapitole], sledovaný nedostává žádné signály přímo, ale sledovatel je informován, že sledovaný nějaký signál obdržel.
-
-První možnost, jak dosáhnout breakpointu, je použít `ptrace` operaci `PTRACE_SINGLESTEP`. Ta program posouvá vždy o jednu instrukci. Pokud bychom tedy opakovaně volali tuhle operaci a při každém volání se podívali na adresu v čítači instrukcí a porovnali ji se vstupní adresou ELFu, budeme informování přesně o bodu před začátkem našeho kódu. Tento postup nicméně obsahuje dva problémy. Zaprvé, RIP registr (čítač instrukcí) nelze číst.
-#footnote[
-  Registr RIP nelze číst..._přímo_. Pro nepřímé čtení lze použít nějakou instrukci, která skáče mezi adresami v paměti (např. `CALL`). Tyto instrukce vždy nahrají současnou hodnotu RIP do zásobníku a nahrají do něj jinou, nadefinovanou adresu. Instrukce `RET` pak ze zásobníku přečte první položku a nahraje ji do RIP registru. @intel-volume1[kap. 3.5] @intel-volume2
-]
-Zadruhé, volat `ptrace` pro krokování každé instrukce je velice neefektivní. Z obou těchto důvodu tohle řešení nepřipadá absolutně v úvahu, proto mnohem lepším řešením je vyvolat SIGTRAP ve správný čas a hlavně na správném místě.
-
-Jak tedy vyvolat SIGTRAP na místě, kde ho potřebujeme? SIGTRAP signál je doručen, pokud na #abbr.a[CPU] dojde k breakpoint exception (\#BP). @signal Dle Intel 64 manuálu pro x86-64 #abbr.a[CPU], je několik způsobů, jak \#BP vyvolat a pro nás jsou relevantní dva z nich.
-
-==== Instrukce INT3
-Instrukce INT3 (opcode `0xCC`) vyvolává \#BP. Má velikost přesně jednoho bytu, aby mohla nahradit celou nebo část jakékoliv instrukce. @intel-volume2[kap. 3.3] V praxi tedy byte na adrese, kde chceme udělat breakpoint, uložíme v paměti sledovatele, nahradíme ho za `0xCC` a jakmile zjistíme, že sledovaný obdržel SIGTRAP, nahradíme změněný byte za původní a pokračujeme ve spouštění sledovaného. INT3 generuje na #abbr.a[CPU] chybu kategorie trap, která posune RIP za adresu této instrukce. @intel-volume3[kap. 6.5] Registr RIP nicméně není přímo zapisovatelný.
-
-`ptrace` umožňuje číst ze dvou regionů paměti: USER region a data programu. USER region obsahuje primárně registry, ale je v něm i pár věcí navíc. Abychom načetli něco z USER regionu, můžeme použít `PTRACE_PEEKUSER` operaci. Soubor `<asm/ptrace-abi.h>` obsahuje všechny posuny pro všechny #abbr.a[GP] registry. Pokud tedy chceme přečíst čistě RAX registr, stačí využít těchto posunů a prakticky to lze vidět ve @ptrace-concept[Výpisu] a ve @breakpoint-creation-example[Výpisu]. Kernel zapisuje do USER regionu při vyhození procesu z #abbr.a[CPU] a načítá z něj, když dává proces zpátky na #abbr.a[CPU].
-
-Musíme tedy uložit původní slovo, nahradit ho za `0xCC` byte, počkat než program vyhodí SIGTRAP, vrátit zpátky původní slovo a dekrementovat RIP. V literatuře a na internetu se tomuhle postupu říká softwarový breakpoint. @breakpoints @breakpoint-creation-example ukazuje tvorbu tohoto breakpointu v jazyce Rust.
+`Tracee` obsahuje jak jednoduché, kolikrát i jednořádkové metody (např. `read`, `write`, `read_rax` atd.), tak i složitější metody s náročnější logikou. Jednou z nich je metoda `memcpy` (k vidění ve @memcpy-tracee[Výpisu]), která za pomocí `process_vm_readv` zkopíruje úsek paměti ze sledovaného do sledujícího. Tento úsek začíná na adrese `base` ve sledovaném a má délku `len` bytů. Metoda vytvoří instance `IoSliceMut` a `RemoteIoVec`, které jsou `nix` obaly nad `iovec`, definovaného ve @process-vm-readv[Výpisu], které poté předá do `nix` verze `process_vm_readv` volání. Jako návratovou hodnotu pak vrací načtené byty.
 
 #figure(
   ```rust
-  // uložení původního slova
-  let original_word = tracee.read(breakpoint_address)?;
-  tracee.write(breakpoint_address, 0xCC)?;
-  tracee.cont()?;
-
-  // čekání, než program dorazí k 0xCC instrukci
-  match tracee.wait_for_stop() {
-      Ok(WaitEvents::Stopped(Signal::SIGTRAP)) => {
-        // dekrementování RIP registru
-        let rip = tracee.read_user((RIP * 8) as usize)? as usize;
-        tracee.write_user((RIP * 8) as usize, (rip - 1) as i64)?;
-        // nahrazení původního slova
-        tracee.write(main_address, original_word)?;
-      }
-      _ => panic!(),
+  pub fn memcpy(&self, base: usize, len: usize) -> ErrnoResult<Vec<u8>> {
+      let mut data = vec![0; len];
+      if base == 0 { return Ok(vec![0]) }
+      process_vm_readv(
+          self.pid,
+          &mut [IoSliceMut::new(&mut data)],
+          &[RemoteIoVec { base, len }],
+      )?;
+      Ok(data)
   }
   ```,
-  caption: [Ukázka vytvoření softwarového breakpointu]
-) <breakpoint-creation-example>
+  caption: [Metoda `memcpy` ze struktury `Tracee`],
+) <memcpy-tracee>
 
-Tento postup jsem zvolil i v práci, primárně díky jeho jednoduchosti, ale taky, protože jsem úplně nevěděl o druhém způsobu.
-
-==== Ladící registry
-x86-64 nabízí několik ladících registrů, označené DR0 až DR7. Je možné do nich zapisovat pouze z #abbr.a[CPL] 0.
-
-Struktura celého USER regionu, zmíněného v předchozí kapitole, se nachází ve struktuře `user`, definované v `<sys/user.h>`. #footnote[Doporučuji se do tohoto souboru podívat jenom kvůli jeho úvodnímu blokovému komentáři o #abbr.a[GDB].] Úplně poslední částí této struktury je pole o velikosti 8 64bitových čísel pojmenované `u_debugreg` a právě tohle obsahuje debug registry, od DR0 po DR7. Pokud je tedy proces zastaven, můžeme nastavit zde jakoukoliv vyžadovanou hodnotu a kernel ji poté načte do #abbr.a[CPU] když #abbr.a[CPL] je 0.
-
-Teď když víme, jak načíst hodnotu do ladící registru, jaké hodnoty tam vlastně chceme načíst? Pokud se vrátíme ke svaté bibli x86-64 (odkaz na kapitolu v citaci), zjistíme, že registry DR0 až DR3 drží nějakou adresu v paměti, DR6 obsahuje informace o poslední vygenerované \#BP a DR7 obsahuje nastavení ladění. Zbytek je registrů rezervovaný (nejspíše už navždy). @intel-volume3[kap. 18.2] Jak nastavit DR7, aby došlo k \#BP na spuštění instrukce ze vstupní adresy je už mimo rozsah tohoto textu, ale ve zkratce, jde o aktivování breakpointu a nastavení, aby vyvolal \#BP na spuštění instrukce. #footnote[V hardwarových breakpointech lze program přerušit i na čtení a zápis ze zadané adresy, *extrémně* užitečné pro ladění.] Rust má slibně vypadající balíček `x86` s modulem `debugregs`, #footnote[https://docs.rs/x86/latest/x86/debugregs/index.html] který umí automatizovat většinu práce složitého nastavování bitů.
-
-
-=== Čtení mapovaných regionů paměti <memory-maps>
-Aby vytvoření breakpointu nebylo až moc jednoduché, musíme ještě získat správnou adresu. Vstupní adresa je relativní ke startu ELF souboru, ale nikoliv k adrese v paměti. Při `execve` kernel načte celý program do paměti a ačkoliv program může přímo pracovat s relativními adresami, pokud chceme zapsat do paměti sledovaného, musíme získat _reálnou virtuální_ adresu.
-vlajky
-Kernel drží v `procfs` soubor `maps` pro každé #abbr.a[PID], který obsahuje mapované oblasti paměti pro proces. Jeho formát je popsaný v manuálové stránce pro `proc_pid_mem`, nicméně ve zkratce obsahuje rozsah virtuální adresy a její posun od relativní. Když chceme převést relativní adresu na virtuální, stačí vzít posun, který bereme jako start daného záznamu a přičíst k němu rozsah, který po součtu bereme jako konec oblasti záznamu. Pokud je naše adresa mezi začátkem a koncem záznamu, stačí pouze přičíst naši adresu ke adrese startu rozsahu. Pokud naše adresa není mezi koncem a začátkem, pokračujeme k dalšímu záznamu. @proc-pid-mem
-
-V práci jsem tedy musel načíst vstupní adresu ELF souboru, poté ji převést na virtuální adresu, nastavit na ni instrukci `0xCC` a po její aktivaci nahradit za původní byte. Výsledkem tohoto je, že BouboTrace umí přeskočit počáteční kroky spouštění programu.
-
-== Sledované systémové volání
-BouboTrace umí korektně načíst minimálně následující systémové volání: `openat`, `read`, `write`, `close`, `socket`, `bind`, `listen`, `accept` a `exit_group`. U těchto volání jsou uloženy jména, podstatné hodnoty v parametrech, parametry s načtenou pamětí a návratová hodnota. U všech ostatních volání je uloženo jejich číslo, všechny možné registry s parametry a návratová hodnota. @syscall-load-difference znázorňuje rozdíl ve čtení mezi podporovaném a nepodporovaném systémovém volání.
+Na metodě `memcpy` staví pak metoda `memcpy_until`, která kopíruje úseky paměti dokud nenarazí na nějaký byte a řídí se principy definovaných v @syscall-loading[Kapitole], zejména na diagramu v @chart-variable-loading[Obrázku]. Načítá menší úseky dat do určité délky a končí, jakmile funkce předána do metody vrátí na jakémkoliv načteném bytu hodnotu `true`. Tohoto pak využívá metoda `strcpy`, která do `memcpy_until` předá takovou funkci, aby metoda byla ukončena na bytu `0x00` a tudíž aby načetla celý C řetězec. Její definici lze vidět ve @strcpy-tracee[Výpisu].
 
 #figure(
-  ```
-  Unknown { id: 11, args: SyscallArgs(129295288074240, 237451, 129295288569856, 140728277551152, 0, 129295288562432), return_value: 0 }
-
-  Openat { dirfd: -100, pathname: [116, 101, 115, 116, 46, 116, 120, 116, 0], flags: OFlagSer(OFlag(O_CREAT | O_RDWR | O_TRUNC)
+  ```rust
+  pub fn strcpy(&self, base: usize) -> ErrnoResult<Vec<u8>> {
+      self.memcpy_until(base, |num| *num == 0)
+  }
   ```,
-  caption: [Rozdíl mezi podporovaném a nepodporovaném systémovém volání]
-) <syscall-load-difference>
+  caption: [Definice metody `strcpy` ve struktuře `Tracee`],
+) <strcpy-tracee>
 
-Specifické volání jsem v implementaci prioritizoval, protože se jedná o často volané volání, které hrají roli pro sledování chování programu. `read` a `write` slouží ke všeobecnému zápisu, `socket`, `bind` a `listen` jsou určené na sockety a zejména komunikaci po síti a nakonec je zde `exit_group`, kterým každý program musí končit. Některé systémové volání, jako `mmap`, jsou volané častěji než ty, které jsem prioritizoval, nicméně jejich sledování není až tak klíčové pro sledování, co program dělá.
+Nakonec jsou zde i metody na `wait_for_stop`, `cont` a `syscall`. V @ptrace-syscall[Kapitole] bylo popsáno, že signály jsou vždy doručené sledovateli a nikoliv sledovanému. Je čistě na sledovateli (tedy nás), co s daným signálem dělat. Všechny doručené signály jsou doručené v `waitpid` systémovém volání, které je volané ve `wait_for_stop` metodě. Pokud je sledovaný zastaven na nějakém signálu, je tento signál uložen. Výjimku tvoří signály:
+- `SIGKILL`, který je kernel přímo doručí sledovanému @ptrace
+- `SIGTRAP`, který signalizuje trap signál z #abbr.a[CPU] a je používaný pro nastavené breakpointu (více v @breakpoint-creation[Kapitole])
+- `SIGCHLD`, kterým `ptrace` signalizuje, že sledovaný vytvořil nového potomka (tedy zavolal `fork` nebo podobné volání) @signal
 
-Přidat implementaci pro chybějící volání už není tak složité, jelikož základní struktura pro čtení parametrů je už ve struktuře `Tracee`. Nejsložitější je zpravidla čtení příznaků a případně obstarat speciální chování nějakého volání.
+Proces čekání na zastavení a uložení signálu ve `wait_for_stop` metodě znázorňuje @wait-for-stop-chart. Uložený signál je poté sledovanému předán při volání `cont` nebo `syscall` metody, tento proces lze vidět v @tracee-restart-chart[Obrázku].
 
+#figure(
+  image("sources/wait_for_stop.svg"),
+  caption: [Diagram fungování `wait_for_stop` metody],
+) <wait-for-stop-chart>
+
+#figure(
+  image("sources/tracee_restart.svg"),
+  caption: [Diagram doručení signálu sledovanému],
+) <tracee-restart-chart>
+
+=== Enum `Syscall`
+Enum `Syscall` obstarává načítání všech implementovaných systémových volání. @syscall-enum-definition obsahuje výsek její definice. Obsahuje metodu `parse`, která vezme referenci na strukturu `Tracee`, na které byla zavolána metoda `syscall` a čeká, až se zastaví na vstupu do systémového volání. Poté načte všechny parametry systémové volání (čísla, řetězce, příznaky, pole, apod.), zavolá `syscall` metodu a poté přečte návratovou hodnotu.
+
+Pokud během čtení dojde k nějaké chybě, ať už z `ptrace` nebo z návratové hodnoty systémového volání, vrátí metoda `parse` chybu ve formě typu `SyscallParseError`. Tento typ umožňuje zahrnout hromadu chyb a stavů, od chyby `ptrace` přes ukončení sledovaného až po chybu systémového volání. Jeho celý obsah je ve @parse-error[Výpisu] a využívá balíčku `thiserror`, #footnote[https://docs.rs/thiserror/latest/thiserror/] který umožňuje lehce implementovat `Error` trait, určený pro chyby. Pokud čtení v metodě `parse` proběhne úspěšně, vrátí metoda instanci enumu `Syscall`, který obsahuje přečtené systémové volání.
+
+#figure(
+  ```rust
+  pub enum Syscall {
+      Read {
+          fd: i32,
+          read_bytes: Vec<u8>,
+          requested_count: usize,
+      },
+      Write {
+          fd: i32,
+          buf: Vec<u8>,
+      },
+      Unknown {
+          id: u64,
+          args: SyscallArgs,
+          return_value: i64,
+      }
+  }
+  ```,
+  caption: [Část definice struktury `Syscall`],
+) <syscall-enum-definition>
+
+#figure(
+  ```rust
+  #[derive(Error, Debug)]
+  pub enum SyscallParseError {
+      #[error("error '{error:?}' on syscall {syscall}")]
+      SyscallError { syscall: SyscallDisc, error: Errno },
+      #[error("error in syscall by tracer: {0:?}")]
+      PtraceError(#[from] Errno),
+      #[error("tracee process is not running and exited with status code {0}")]
+      ProcessExit(i32),
+      #[error("unexpected status returned by waitpid: {0:?}")]
+      UnexpectedWaitStatus(WaitStatus),
+      #[error("error returned by waitpid with errno: {0:?}")]
+      WaitPidError(Errno),
+      #[error("tracee terminated by OS with signal {signal:?}")]
+      Terminated { signal: Signal, core_dumped: bool },
+  }
+  ```,
+  caption: [Struktura `SyscallParseError`],
+) <parse-error>
+
+=== Rozhraní pro práci s knihovním kódem
+Ačkoliv jsem zde nejprve popsal jak odchytávám systémové volání v knihovním kódu, během implementace jsem nejprve uvažoval, jaké rozhraní by knihovní kód měl mít a až pak se zabýval jeho psaním. V jazyce Rust jsou pro reprezentaci sekvence dat velice oblíbené iterátory. Původní rozhraní, které jsem si pro knihovní kód navrhnul lze vidět ve @first-interface[Výpisu].
+
+#figure(
+  ```rust
+  for syscall: Syscall in tracee.run() {
+      if let Syscall:Write(_, _, bytes) = syscall {
+          println!("called write with {bytes:?}");
+      }
+  }
+  ```,
+  caption: [Představované původní rozhraní pro (uživatelský) kód spustitelného souboru.],
+) <first-interface>
+
+Ze začátku tento návrh skvěle, nicméně eventuálně jsem narazil na problém chyb; knihovní kód by si neměl nechávat chyby jenom pro sebe. Mezi možné chyby patří nějaká chyba z `ptrace` (např. když je daný region paměti uzamknut, proces s daným #abbr.a[PID] neexistuje atd.), ale i chyba ze systémového volání (více již popsáno v @syscall-errors[Kapitole]). Jako chyby jsou předávány i různé události (třeba ukončení procesu). Finální typ iterátoru je tedy `Result<Syscall, SyscallParseError>`, uživatel je tak informován o všech chybách a událostech. Příklad finálního čtení iterátoru je ukázán ve @final-interface[Výpisu].
+#figure(
+  ```rust
+  for syscall in tracee.run() {
+      match syscall {
+          Ok(syscall) => println!("received syscall: {syscall:?}"),
+          Err(syscall_error) => println!("an error occurred: {syscall_error}"),
+      }
+  }
+  ```,
+  caption: [Finální rozhraní uživatelského kódu],
+) <final-interface>
+
+=== Aplikační kód
+Aplikační kód BouboTrace zahrnuje způsob, jak spustit sledovaného a taky #abbr.a[CLI]. Pro čtení parametrů z příkazové řádky jsem použil balíček `clap`, který umožňuje velice jednoduše číst argumenty v příkazovém řádku do struktur. Po přečtení parametrů, které zahrnují například úroveň logování, název spouštěného programu, jeho pracující složku a různé další věci, dojde ke spuštění sledovaného. Jak bylo zmíněno v @ptrace-example-chapter[Kapitole], pro inicializaci `ptrace` je potřeba, aby dítě zavolalo `PTRACE_TRACEME` operaci. Sledující musí tedy provést následující kroky:
+
++ Zavolat `fork` (nebo `clone`) a tím vytvořit kopii sama sebe.
++ V rodiči počkat na zastavení dítěte.
++ V dítěti zavolat `PTRACE_TRACEME` operaci.
++ V dítěti zavolat `execve` systémové volání, které nahradí daný program s programem zadaném v argumentu volání. Ve zkratce _nahradí_ současný program za jiný.
+
+Jazyk Rust obsahuje ve standardní knihovně strukturu `Command`, která umožňuje spustit program jako dítě současného programu. Disponuje i unsafe metodou `pre_exec`, která obsahuje anonymní funkci, která se spustí v dítěti před samotným programem. Povedlo se mi nicméně najít balíček `spawn_ptrace`, #footnote[https://docs.rs/spawn-ptrace/latest/spawn_ptrace/] který celý tento proces dokáže automatizovat a chybově ošetřit.
 
 == Serializace dat
 Implementace serializace dat jsem udělal přes balíček `serde`, který nabízí serializaci do různých formátů. V tomhle případě jsem zvolil #abbr.a[JSON].
@@ -686,27 +810,6 @@ Implementace serializace dat jsem udělal přes balíček `serde`, který nabíz
 Aby struktura mohla být serializována, používá se zpravidla `serde::Serialize` makra. V ideálním případu stačí tohle makro aplikovat na strukturu a vše jde najednou lehce serializovat, bohužel, reálný svět takový není, protože používat makra můžeme pouze na vlastní struktury. BouboTrace používá na mnoha místech struktury z jiných knihoven, třeba pro `openat` příznaky. V práci jsem pro tyto typy implementoval tzv. newtype návrhový vzor, kdy je typ z cizí knihovny obalen v lokálním typu a pro tento typ jsem napsal ručně `Serialize` implementaci. V práci je tak obalen každý typ, který to vyžadoval.
 
 Pro testovací účely jsem napsal jednoduchý iterátor, který načte všechny data do vektoru a serializuje. Výsledkem byl #abbr.a[JSON], který dle mého názoru nebyl moc dobře čitelný, protože používal `Ok` a `Error` z `Result` jako typy pro hlavní klíč. Mnohem větší smysl za mě dávalo mít jako hlavní klíč jméno volání a pak nějaké pojmenování pro chybu. Tím jsem se dostal k výsledné struktuře, která je ve @final-json[Výpisu].
-
-#figure(
-  ```json
-  [
-    {
-      "close": {
-        "fd": 3
-      }
-    },
-    {
-      "exit_group": {
-        "status": 0
-      }
-    },
-    {
-      "syscall_error": "tracee process is not running and exited with status code 0"
-    }
-  ]
-  ```,
-  caption: [Finální podoba serializovaného #abbr.a[JSON]],
-) <final-json>
 
 Pro vytvoření takové serializace jsem musel vytvořit vlastní `Result` strukturu a vytvořit pro ni serializaci. Implementoval jsem pro ni i `From` trait, aby původní iterátor šel lehce převést do kontejneru této nové struktury. @syscall-wrapper ukazuje jak definici celého nového typu, tak i převod z typu používaného knihovnou.
 
@@ -739,55 +842,170 @@ Pro vytvoření takové serializace jsem musel vytvořit vlastní `Result` struk
 ) <syscall-wrapper>
 
 == Testování
+Pro testování jsem využil snapshot testingu za pomocí balíčku `insta`. Snapshot testing funguje tak, že porovnává nejnovější výpis testu oproti předchozímu. @insta-rs
+
+V práci jsem tedy napsal několik krátkých programů v jazyce C, které testují čtení systémových volání. Příklad jednoho z testů pro `openat`, `write` a `close` je ve @open-example[Výpisu]. @execve-test zase obsahuje test pro volání `execve`, kde testuje i případ, kdy `execve` vrátí chybu.
 // TODO dopsat testy z evaluace
 
-= Evaluace implementace
-V této kapitole se podíváme na funkčnost výsledného řešení. Jedním z cílů BouboTrace bylo zaručit, aby trasované programy jely tak, jako by nebyly trasované. K tomu je klíčové, aby trasování nebylo nějak ovlivněno a aby bylo rychlé.
+#figure(
+  raw(read("source_codes/exec.c"), block: true, lang: "c"),
+  caption: [Ukázka testu pro volání `execve`],
+) <execve-test>
 
-== Bezvadnost <correctness>
+Test nejprve spustí `make` pro přeložení všech testovacích C programů a poté každý z nich po jednom spouští. Jako výstup pro každý program vrací vektor `Syscall` enumů, které pak `insta` porovnává přes jejich `Debug` výpis s předchozímí testy. Pokud se nejnovější snapshost liší od předchozího, nabídne `insta` okno se změnami a nabídne možnost pro přeskočení, označení testu jako vadný anebo pro přijmutí nejnovějšího snapshotu. Tento postup byl pro mě dobrý, protože mi umožnil vidět, jak BouboTrace postupně pokrývá více systémových volání a zároveň vidět, zda způsob čtení starého volání nebyl změněn.
+
+Nevýhodou tohoto řešení je, že ne vždy jsou vstupy systémových volání mezi běhy programů stejné. Pokud se vrátíme k `execve` testu ve @execve-test[Výpisu] a podíváme se na třetí parametr `execve`, zjistíme, že tento parametr přijímá proměnné prostředí, které test převzal z třetího parametru `main` funkce. V praxi se nicméně proměnné prostředí neustále mění a výstup tohoto testu tudíž není konzistentní. Zde není až takový problém předat do `execve` předem definované pole proměnných prostředí, nicméně `execve` není jediné volání, kde tento problém vzniká. Děje se tak tomu třeba i u serverového kódu pro sockety (kde se používá volání `accept`), kde klient přichází vždy z jiného portu. Řešením zde by bylo ignorovat měnící se hodnoty, nicméně z časových důvodů jsem se k tomuto nedostal.
+
+Dalším z problémů byly systémové volání, které se spustily ještě před mým samotným kódem, ještě před obsahem funkcí `main`. Jejich obsah nebyl konzistentní a rozněž překážely ve čtení výstupu. Existuje nicméně způsob, jak tyto volání přeskočit a snímat pouze volání po volání funkce `main` a právě o něm se budeme bavit v další kapitole.
+
+
+== Sledování volání až od funkce `main` <skip-to-main>
+Při psaní v nízkoúrovňových jazycích používáme zpravidla funkci `main` jako první věc, která se v programu spustí. Při překladu a linkování programu dochází k vytvoření souboru ve formátu ELF, který obsahuje jak přeložený kód, tak i nějaké informace k němu.
+
+Pro spuštění programu se v Linuxu používá systémové volání `execve`. Jako první parametr přijímá cestu k souboru (zpravidla v ELF formátu #footnote[`execve` umožňuje volat přímo interpretry pro jazyky, které to vyžadují. Pokud třeba soubor, který začíná s `#!/usr/bin/bash` je předán do `execve`, je místo souboru přímo spuštěn `/usr/bin/bash` s cestou k souboru jako první argument.]). Pokud tento soubor vyžaduje dynamické linkování, je zavolaný interpreter pro načtení sdílených objektů (zpravidla `ld-linux.so`). @execve Jako první systémové volání ihned po `PTRACE_TRACEME` operaci bývá `execve` samotného programu a poté, pokud ELF závisí na dynamických knihovnách, dochází k dynamickému linkování, během kterého dojde k několika systémovým voláním. Až po tomhle všem dorazí sledovaný do funkce `main`.
+
+Formát ELF obsahuje několik sekcí, @elf-diagram kdy každá z nich obsahuje nějaké informace o programu. Pro nás největší význam tvoří položka `e_entry` (dále jako vstupní adresa), která se nachází v hlavičce ELF souboru. Tato položka značí adresu ve virtuální paměti,
+#footnote[V tomto kontextu je virtuální paměť paměť relativní k danému ELF souboru, s tím, že adresa `0x0` odkazuje na start ELF souboru. @elf V praxi přístup k této adrese je složitější, více o tom v @memory-maps[Kapitole].]
+která značí počátek instrukcí (kódu) v ELF souboru. @elf Pokud tedy program spustíme, necháme běžet, zastavíme ve vstupní adrese a až poté budeme sledovat systémové volání, přeskočíme tím všechny volání způsobené dynamickým linkováním.
+
+Pro načtení vstupní adresy v jazyce Rust jsem použil balíček `elf`. #footnote[https://docs.rs/elf/latest/elf/] Do něj stačí předat ELF soubor, který můžeme najít přes `procfs` v souboru `exe` a provést minimální čtení ELF souboru. @proc-pid-exe Minimální čtení umožňuje přečíst obsah hlavičky, ve které se vstupní adresa nachází.
+
+=== Vytvoření breakpointu <breakpoint-creation>
+Většina programátorů zná breakpoint jako řádek v kódu, kde se jejich program zastaví a oni mohou přečíst hodnoty proměnných za běhu. Pro účely jejich vytvoření musíme použít nicméně více konkrétní definici; breakpoint je v paměti sledovaného adresa, kam když dojde čítač instrukcí, tak sledovaný obdrží (zpravidla) SIGTRAP signál a je zastaven. Jak bylo zmíněno v @ptrace-syscall[Kapitole], sledovaný nedostává žádné signály přímo, ale sledovatel je informován, že sledovaný nějaký signál obdržel.
+
+První možnost, jak dosáhnout breakpointu, je použít `ptrace` operaci `PTRACE_SINGLESTEP`. Ta program posouvá vždy o jednu instrukci. Pokud bychom tedy opakovaně volali tuhle operaci a při každém volání se podívali na adresu v čítači instrukcí a porovnali ji se vstupní adresou ELFu, budeme informování přesně o bodu před začátkem našeho kódu. Tento postup nicméně obsahuje dva problémy. Zaprvé, RIP registr (čítač instrukcí) nelze číst.
+#footnote[
+  Registr RIP nelze číst..._přímo_. Pro nepřímé čtení lze použít nějakou instrukci, která skáče mezi adresami v paměti (např. `CALL`). Tyto instrukce vždy nahrají současnou hodnotu RIP do zásobníku a nahrají do něj jinou, nadefinovanou adresu. Instrukce `RET` pak ze zásobníku přečte první položku a nahraje ji do RIP registru. @intel-volume1[kap. 3.5] @intel-volume2
+]
+Zadruhé, volat `ptrace` pro krokování každé instrukce je velice neefektivní. Z obou těchto důvodu tohle řešení nepřipadá absolutně v úvahu, proto mnohem lepším řešením je vyvolat SIGTRAP ve správný čas a hlavně na správném místě.
+
+Jak tedy vyvolat SIGTRAP na místě, kde ho potřebujeme? SIGTRAP signál je doručen, pokud na #abbr.a[CPU] dojde k breakpoint exception (\#BP). @signal Dle Intel 64 manuálu pro x86-64 #abbr.a[CPU], je několik způsobů, jak \#BP vyvolat a pro nás jsou relevantní dva z nich.
+
+==== Instrukce INT3
+Instrukce INT3 (opcode `0xCC`) vyvolává \#BP. Má velikost přesně jednoho bytu, aby mohla nahradit celou nebo část jakékoliv instrukce. @intel-volume2[kap. 3.3] V praxi tedy byte na adrese, kde chceme udělat breakpoint, uložíme v paměti sledovatele, nahradíme ho za `0xCC` a jakmile zjistíme, že sledovaný obdržel SIGTRAP, nahradíme změněný byte za původní a pokračujeme ve spouštění sledovaného. INT3 generuje na #abbr.a[CPU] chybu kategorie trap, která posune RIP za adresu této instrukce. @intel-volume3[kap. 6.5] Registr RIP nicméně není přímo zapisovatelný.
+
+`ptrace` umožňuje číst ze dvou regionů paměti: USER region a data programu. USER region obsahuje primárně registry, ale je v něm i pár věcí navíc. Abychom načetli něco z USER regionu, můžeme použít `PTRACE_PEEKUSER` operaci. Soubor `<asm/ptrace-abi.h>`, nacházející se v `libc`, obsahuje všechny posuny pro všechny #abbr.a[GP] registry. @ptrace-abi Pokud tedy chceme přečíst čistě RAX registr, stačí využít těchto posunů a prakticky to lze vidět ve @ptrace-concept[Výpisu] a ve @breakpoint-creation-example[Výpisu]. Kernel zapisuje do USER regionu při vyřazení procesu z #abbr.a[CPU] a načítá z něj, když dává proces zpátky na #abbr.a[CPU].
+
+Musíme tedy uložit původní slovo, nahradit ho za `0xCC` byte, počkat než program vyhodí SIGTRAP, vrátit zpátky původní slovo a dekrementovat RIP. V literatuře a na internetu se tomuhle postupu říká softwarový breakpoint. @breakpoints @breakpoint-creation-example ukazuje tvorbu tohoto breakpointu v jazyce Rust.
+
+#figure(
+  ```rust
+  // uložení původního slova
+  let original_word = tracee.read(breakpoint_address)?;
+  tracee.write(breakpoint_address, 0xCC)?;
+  tracee.cont()?;
+
+  // čekání, než program dorazí k 0xCC instrukci
+  match tracee.wait_for_stop() {
+      Ok(WaitEvents::Stopped(Signal::SIGTRAP)) => {
+        // dekrementování RIP registru
+        let rip = tracee.read_user((RIP * 8) as usize)? as usize;
+        tracee.write_user((RIP * 8) as usize, (rip - 1) as i64)?;
+        // nahrazení původního slova
+        tracee.write(main_address, original_word)?;
+      }
+      _ => panic!(),
+  }
+  ```,
+  caption: [Ukázka vytvoření softwarového breakpointu],
+) <breakpoint-creation-example>
+
+Tento postup jsem zvolil i v práci, primárně díky jeho jednoduchosti, ale taky, protože jsem úplně nevěděl o druhém způsobu.
+
+==== Ladící registry
+x86-64 nabízí několik ladících registrů, označené DR0 až DR7. Je možné do nich zapisovat pouze z #abbr.a[CPL] 0.
+
+Struktura celého USER regionu, zmíněného v předchozí kapitole, se nachází ve struktuře `user`, definované v `<sys/user.h>`, nacházející se v `libc`. #footnote[Doporučuji se do tohoto souboru podívat jenom kvůli jeho úvodnímu blokovému komentáři o #abbr.a[GDB].] Úplně poslední částí této struktury je pole o velikosti 8 64bitových čísel pojmenované `u_debugreg` a právě tohle obsahuje debug registry, od DR0 po DR7. @user64 Pokud je tedy proces zastaven, můžeme nastavit zde jakoukoliv vyžadovanou hodnotu a kernel ji poté načte do #abbr.a[CPU] když #abbr.a[CPL] je 0.
+
+Teď když víme, jak načíst hodnotu do ladící registru, jaké hodnoty tam vlastně chceme načíst? Pokud se vrátíme ke svaté bibli x86-64 (odkaz na kapitolu v citaci), zjistíme, že registry DR0 až DR3 drží nějakou adresu v paměti, DR6 obsahuje informace o poslední vygenerované \#BP a DR7 obsahuje nastavení ladění. Zbytek je registrů rezervovaný (nejspíše už navždy). @intel-volume3[kap. 18.2] Jak nastavit DR7, aby došlo k \#BP na spuštění instrukce ze vstupní adresy je už mimo rozsah tohoto textu, ale ve zkratce, jde o aktivování breakpointu a nastavení, aby vyvolal \#BP na spuštění instrukce. #footnote[V hardwarových breakpointech lze program přerušit i na čtení a zápis ze zadané adresy, *extrémně* užitečné pro ladění.] Rust má slibně vypadající balíček `x86` s modulem `debugregs`, #footnote[https://docs.rs/x86/latest/x86/debugregs/index.html] který umí automatizovat většinu práce složitého nastavování bitů.
+
+
+=== Čtení mapovaných regionů paměti <memory-maps>
+Aby vytvoření breakpointu nebylo až moc jednoduché, musíme ještě získat správnou adresu. Vstupní adresa je relativní ke startu ELF souboru, ale nikoliv k adrese v paměti. Při `execve` kernel načte celý program do paměti a ačkoliv program může přímo pracovat s relativními adresami, pokud chceme zapsat do paměti sledovaného, musíme získat _reálnou virtuální_ adresu.
+vlajky
+Kernel drží v `procfs` soubor `maps` pro každé #abbr.a[PID], který obsahuje mapované oblasti paměti pro proces. Jeho formát je popsaný v manuálové stránce pro `proc_pid_mem`, nicméně ve zkratce obsahuje rozsah virtuální adresy a její posun od relativní. Když chceme převést relativní adresu na virtuální, stačí vzít posun, který bereme jako start daného záznamu a přičíst k němu rozsah, který po součtu bereme jako konec oblasti záznamu. Pokud je naše adresa mezi začátkem a koncem záznamu, stačí pouze přičíst naši adresu ke adrese startu rozsahu. Pokud naše adresa není mezi koncem a začátkem, pokračujeme k dalšímu záznamu. @proc-pid-mem
+
+V práci jsem tedy musel načíst vstupní adresu ELF souboru, poté ji převést na virtuální adresu, nastavit na ni instrukci `0xCC` a po její aktivaci nahradit za původní byte. Výsledkem tohoto je, že BouboTrace umí přeskočit počáteční kroky spouštění programu.
+
+
+= Evaluace implementace
+V této kapitole se podíváme na funkčnost výsledného řešení. Jedním z cílů BouboTrace bylo zaručit, aby trasované programy jely tak, jako by nebyly trasované. Druhým z cílů bylo dělat samotné trasování rychle.
+
+== Bezchybnost <correctness>
 Sledovatel by neplnil jeho práci moc dobře, pokud by omezil funkci sledovaného. Je tedy klíčové, aby BouboTrace zasahoval do funkčnosti sledovaného co nejméně. V rámci tohoto testování jsem postupoval jednoduše, prostě jsem spustil nějaký větší program a sledoval, jak se chová.
 
-První problém jsem objevil ve webovém prohlížeči Chromium. Z nějakého důvodu Chromium na mém systému se vždy ukončí se signálem SIGSEGV. V té době jsem neměl zprovozněné předávání signálů (rozebrané v @ptrace-syscall[Kapitole] a implementované v @tracee-struct[Kapitole]). Co se tedy na konci stalo bylo, že sledovaný (zde Chromium) neustále dokola spouštěl instrukci, která doručila SIGSEGV. #footnote[#abbr.a[CPU] vrátí čítač instrukcí nad adresu před instrukcí, která vyvolala chybu (v tomhle případě page fault, kterou pak kernel doručí jako SIGSEGV). @intel-volume3[kap. 6.5]] Tento signál byl doručen sledovateli, ale nikdy nedorazil sledovanému. Sledovatel jenom pokračoval s exekucí sledovaného a tak pořád dokola. Řešením bylo uložit všechny získané signály a pak je později doručit. V případě SIGSEGV, pokud daný proces nemá k němu signal handler, tak obdrží SIGKILL a je ukončen.
+První problém jsem objevil ve webovém prohlížeči Chromium. Z nějakého důvodu Chromium na mém systému se vždy ukončí se signálem SIGSEGV. V té době jsem neměl zprovozněné předávání signálů (rozebrané v @ptrace-syscall[Kapitole] a implementované v @tracee-struct[Kapitole]). Co se tedy na konci stalo bylo, že sledovaný (zde Chromium) neustále dokola spouštěl instrukci, která doručila SIGSEGV. #footnote[#abbr.a[CPU] vrátí čítač instrukcí nad adresu před instrukcí, která vyvolala chybu (v tomhle případě page fault, kterou pak kernel doručí jako SIGSEGV). @intel-volume3[kap. 6.5]] Tento signál byl doručen sledovateli, ale nikdy nedorazil sledovanému. Sledovatel jenom pokračoval s exekucí sledovaného a tak pořád dokola.
 
-Zkoušel jsem pak i různé další programy, jako Firefox, Dolphin, Darktable, GIMP, Krita, VLC a jiné. U žádného z nich jsem nezaznamenal nějaký problém během toho, co byl trasován. Je ale dobré zmínit, že BouboTrace nepodporuje sledování více vláken naráz, sleduje pouze jenom hlavní (viz @support-threads).
+Zkoušel jsem pak i různé další programy, jako Firefox, Dolphin, Darktable, GIMP, Krita, VLC a jiné. U žádného z nich jsem nezaznamenal nějaký problém během toho, co byl trasován.
 
-== Rychlost
-// TODO otestovat rychlost
-Jedním z důvodů, proč jsem zvolil jazyk Rust, byla právě rychlost.
+=== Pokrytí systémových volání
+V @implemented-syscalls[Kapitole] jsem zmínil podporované a nepodporované systémové volání v BouboTrace. Rovněž jsem tam napsal, že jsem prioritizoval více časté volání. Jaké je tedy procentuální pokrytí systémových volání v praxi?
 
-== Pokrytí systémových volání
+Nenapadl mě moc dobrý způsob, jak tuhle informaci změřit. Rozhodl jsem se tedy spustit několik programů a prostě je _normálně_ používat na dobu kolem jedné minuty. @syscall-coverage znázorňuje celkový počet volání provedených v daném vláknu a kolik procent z nich je podporováno. Znázorňuje i počet unikátních volání (volání bylo voláno alespoň jednou), které vlákno udělalo a kolik procent z nich je podporováno. Je z ní vidět, že Dolphin a Neovim udělaly nejvíce podporovaných volání, což dává smysl, protože oba dva pracují silně se souborovým systémem. Nejméně podporovaných volání udělalo Chromium, kde hodně z těch nepodporovaných souvisí s komunikací mezi vlákny. Podporované unikátní volání se drží zpravidla kolem $10%$.
+
+#figure(
+  table(
+    columns: (auto, auto, auto, auto, auto),
+    align: (left, right, right, right, right),
+    [*Program*],
+    [*% celkové volání*],
+    [*Volání celkem*],
+    [*% unikátní volání*],
+    [*Unikátní volání*],
+
+    [Dolphin], [$41.07%$], [$75202$], [$10.34%$], [$87$],
+    [Neovim], [$34.82%$], [$1275$], [$16.67%$], [$36$],
+    [VLC], [$24.05%$], [$2308$], [$11.11%$], [$54$],
+    [Krita], [$20.30%$], [$127265$], [$9.88%$], [$81$],
+    [Chromium], [$8.23%$], [$273202$], [$10.42%$], [$96$],
+  ),
+  caption: [Tabulka procentuálního pokrytí systémových volání mezi programy],
+) <syscall-coverage>
+
+@uncovered-usage znázorňuje deset nejvíce volaných nepodporovaných volání provedené programy v @syscall-coverage[Tabulce]. Nejčastěji volané je `recvmsg`, které přijímá zprávy ze socketů, z nichž celkem $99.9%$ provedlo Chromium. Jak Chromium tak Krita udělaly velký počet volání, Chromium udělalo více volání spojené s komunikaci mezi procesy a sockety, Krita preferuje volání spojené se čtením a manipulací souborů.
+
+#figure(
+  image("sources/syscall_uncovered_usage.svg"),
+  caption: [Počet volání deseti nejčastějších nepodporovaných volání programy v @syscall-coverage[Tabulce]],
+) <uncovered-usage>
+
 // TODO dopsat a změřit data pro tohle
 
-= Možnosti rozšíření
-Bohužel, čas na bakalářskou práci je limitovaný, a to znamená, že ne na každý nápad je čas. Proto se v této kapitole podíváme na prvky práce, které jsem nestihl nebo nezvládl dokončit nebo začít.
+== Rychlost
+Jedním z důvodů, proč jsem zvolil jazyk Rust, byla právě rychlost a proto by bylo teď zajímavé vyhodnotit výsledek. K měření výkonu jsem použil nástroj hyperfine, #footnote[https://github.com/sharkdp/hyperfine] který přijímá jeden nebo více programů, kde pro každý z nich udělá určitý počet spuštění a poté je porovná mezi sebou. Vypíná pro měřené programy standardní výstup a umožňuje uložit výsledek do souboru. 
 
-== Sledování více systémových volání
-Systémových volání v Linuxu je _extrémně *hodně*_ a realisticky jsem je nemohl všechny implementovat pro tuhle práci. Nicméně pro úplnou funkčnost by bylo nezbytné implementovat minimálně ty, které provádí nějakou manipulaci s vnějším světem (není úplně nutné sledovat třeba `poll`, ale je důležité sledovat např. `creat`, `mmap`, `mprotect`, `ioctl` a další). V rámci práce jsem nicméně implementoval všechny nutné základy pro jednoduché přidávání dalších volání (zejména kopírování z paměti sledovaného, ale i celá `ptrace` infrastruktura).
+BouboTrace jsem měřil s proměnnou prostředí `RUST_LOG` na hodnotu `off`, čímž jsem vypnul veškeré logování do konzole. @benchmark-results zobrazuje výsledky měření pro několik programů. Sloupec "% celkem" označuje procento podporovaných volání a sloupec "% unikátní" značí počet podporovaných unikátních volání pro daný benchmark.
 
-== Podpora vláken <support-threads>
-V současném stavu BouboTrace sleduje jenom jedno vlákno procesu. Je známo, že se zavolal `clone`, `fork` nebo `execve`, ale tato informace není nijak využita a druhé vlákno není sledované. Vzhledem k tomu, že BouboTrace má být ke sledování velkých programů, které *používají* vlákna, je tato funkcionalita nesmírně užitečná pro reálné využití. `ptrace` obsahuje možnosti pro automatické sledování dětí sledovaného, jde jenom o to v nich provést přeskočení do `main` funkce, pokud třeba, a sledovat veškerou akci v nich (ideálně paralelně) společně s hlavním procesem. Myšlenkově nejde o moc složité téma, implementačně ano.
+`sysbench` ani `iperf3` nevidí velké rozdíly ve výkonu. Je to primárně kvůli tomu, že volají systémové volání z vláken, které BouboTrace zatím neumí sledovat. `darktable-cli` taky používá vlákna, nicméně preferuje dělat spoustu volání i tak ve hlavním vláknu, protože ze všech testovaných programů udělalo i nejvíc volání. Z toho důvodu jsem se rozhodl i udělat vlastní program, který je ve @write-bench[Výpisu] a v tabulce reprezentovaný jako `write_bench`, který neustále volá volání `getrandom` a zapisuje výsledek za pomocí `write` do `/dev/zero`, kde jsou všechny zapsané data okamžitě ignorována; jinými slovy, ten `write` reálně nic nedělá. Tento test viděl masivní redukci ve výkonu.
 
-== Rozbalení zásobníku
-Představme si situaci, kdy se zpětně díváme na seznam volání nějakého programu a vidíme, že udělal `write`, který vypsal nějaký text do konzole. Bylo by extrémně užitečné vědět, který řádek našeho kódu tohle volání udělal. ELF soubor může obsahovat ladící symboly, které umožňují vytrasovat danou instrukci k řádku kódu. Problém je, že je k tomu potřeba ve většině případů rozbalit zásobník.
+#figure(
+  raw(read("source_codes/write_bench.c"), lang: "c", block: true),
+  caption: [Vlastní benchmark, `write_bench`, používající silně volání `getrandom` a `write`]
+) <write-bench>
 
-Rozbalením zásobníku se rozumí, že po něm putujeme nahoru po stopách zavolaných funkcí. Každé volání funkce vytváří na zásobníku nový rámec začínající adresou předchozího volání. Pokud tedy v našem kódu zavoláme `printf` a v něm se zavolá `write`, stane se tak v rámci `printf` a ne v našem rámci, tudíž současná adresa není uvnitř našeho kódu a nemůžeme přečíst část, kde byl zavolaný `printf`. Řešení je zde putovat po zásobníku, než dorazíme do bodu, kdy se `printf` zavolal. @intel-volume2[kap. 3.3]
-
-V praxi tohle udělat správně je šíleně komplexní záležitost. Existuje na to několik řešení a balíčků, nicméně jsem se nedostal k žádnému z nich. Pokud bych někdy tuto funkcionalitu implementoval v potencionálním rozšíření BouboTrace, jednalo by se o takovou _hlavní věc, která jinde není_, #abbr.a[GDB] sice umožňuje zastavovat na systémových volání, ale extrémně blbě se to filtruje.
-
-== Testování
-Testování je v základní fázi v BouboTrace udělané za pomocí snapshotů za pomocí balíčku `insta`. #footnote[https://docs.rs/insta/latest/insta/]. Proces testování funguje na `Debug` výpisu vektoru se systémovými volání a chybami, kdy se jeho obsah porovnává vždy s předchozím testem a zjišťují se rozdíly mezi nimi. Ty se pak můžou schválit jako platné, nebo vrátit zpátky jako chyba. Tento postup je výborný jak pro programy postupně přidávající funkcionalitu, tak i pro programy testující, co se změnilo po nějakých úpravách.
-
-Snapshot testing v BouboTrace funguje jak má a celý proces je (včetně překladu testovacích souborů) automatizovaný. První problém je, že se porovnává `Debug` výpis, což není úplně ideální a mnohem větší smysl by dávalo porovnávat serializovaný #abbr.a[JSON]. Druhý problém je, že velice hodně parametrů systémových volání se mění s každým během programu. `openat` vrátí jiný file descriptor. `socket` dá jiné číslo socketu. `mprotect` pracuje s jinou adresou v paměti. A tak dále. Řešením zde by bylo přidat do testů ignorování pro určité hodnoty. `insta` tuto funkcionalitu má, ale použít ji korektně pro každý test tak, aby se stále testovalo všechno nezbytné, je komplikované.
-
-== Držení informací o současném stavu
-V situaci, kdy program běží by se nebylo špatné zeptat BouboTrace, co má aktivně otevřené a co používá. V praxi na tohle existují už jiné nástroje, které tuto práci zvládají dobře (např. `lsof` a `htop`), nicméně nebylo by špatné mít všechno na jednom místě a i s případnou historií. Nejedná se rozhodně o tak podstatně chybějící funkcionalitu, jako rozbalování zásobníku, ale nazval bych ji jako _nice-to-have_.
-
+#let bench_row(normal, boubo) = {
+  return ([$#normal " s"$], [$#boubo " s"$], [$#calc.round(boubo - normal, digits: 2) " s"$])
+}
+#figure(
+  table(
+    columns: (auto, auto, auto, auto, auto, auto),
+    align: (left, right, right, right, right, right),
+    [*Program*], [*Normální*], [*BouboTrace*], [*Rozdíl*], [*% celkem*], [*% unikátní*],
+    [`darktable-cli` #footnote[Export přes OpenCL do formátu JPEG, 36 obrázků ze Sony Alpha II s realistickými úpravami. ]], ..bench_row(28.23, 36.13), [$-$ #footnote[Serializovaný výstup z BouboTrace měl 11 GiB, můj skript na čtení podporovaných volání ho nedokázal načíst.]], [$-$],
+    [`darktable-cli-small` #footnote[Tento běh proběhl stejně jako předchozí, jenom se 4 fotkami.]], ..bench_row(5.90, 6.54), [$42.04%$], [$10.34%$],
+    [`write_bench`], ..bench_row(.47, 13.7), [$100%$], [$57.14%$],
+    [`iperf3` #footnote[Server i klient běželi na jednom počítačí, použil jsem parametr `-n 50G` pro přenos 50 gibibajtů.]], ..bench_row(11, 11.01), [$39.72%$], [$21.88%$],
+    [`sysbench` #footnote[Spuštěno přes příkaz `sysbench memory run`.]], ..bench_row(10, 10.01), [$62.75%$], [$16.67%$],
+  ),
+  caption: [Porovnání průměrné doby běhu trasovaného a netrasovaného programu]
+) <benchmark-results>
 
 = Závěr
-// TODO zmínit testy
 V rámci této práce jsem popsal důvody, proč současné řešení nestačí na sledování komplexních programů a zavítal do této problematiky snahou o implementaci takového nástroje. Implementovaný nástroj umí snímat systémové volání, serializovat je do souboru a skočit v ELF souboru až do relevantní části. Je v něm i kompletní #abbr.a[CLI] s možností nastavit některé atributy chování programu. Nástroj je postaven tak, aby byl velice rozšířitelný o všechny původně zamýšlené funkcionality.
 
-Je zde spousta chybějících funkcionalit, které mám v plánu do budoucna přidat, primárně se jedná o vlákna a rozbalení zásobníku. Během práce jsem se dozvěděl extrémně moc nových věcí o funkčnosti x86 procesorů, Linux kernelu a i programovacím jazyku Rust.
+// TODO udělat nějaký závěr z evaluace a testů
+
+Do budoucna bych rád do implementace přidal chybějící funkcionality. Patří mezi ně sledování více systémových volání, podpora vláken, rozšíření testů a možnost vidět, z jakého řádku kódu bylo dané volání zavoláno. Během práce jsem se nicméně i tak dozvěděl extrémně moc nových věcí o funkčnosti x86 procesorů, Linux kernelu a i programovacím jazyku Rust.
 
 #bibliography(
   "bibliography.yml",
@@ -801,7 +1019,7 @@ Je zde spousta chybějících funkcionalit, které mám v plánu do budoucna př
 = Obsah přílohy
 // TODO dopsat
 
-= Spouštění a používání BouboTrace
+= Spouštění a používání BouboTrace <run-boubotrace>
 Nástroj BouboTrace využívá systému Cargo, které obsahuje spoustu funkcionalit pro správu programů. Pro spuštění BouboTrace v release módu stačí ve složce s `Cargo.toml` souborem spustit příkaz `cargo run -r`. Pro zadání argumentů je potřeba přidat dvě pomlčky, takže pro zadání `--help` napíšeme `cargo run -r -- --help`.
 
 Po spuštění s `--help` vypíše program uživateli nápovědu, nicméně pokud chceme nastavit pracující složku na `work_dir`, vypsat každou hlášku, uložit výsledek do souboru `out.json` a spustit program `a.out`, zadáme následující příkaz: `cargo run -r -- -w work_dir/ a.out -vvv -o out.json`. BouboTrace kontroluje všechny špatně zadané cesty a vypíše v daném případě chybovou hlášku.

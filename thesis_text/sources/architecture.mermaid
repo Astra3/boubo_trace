@@ -1,0 +1,39 @@
+flowchart TD
+    subgraph app [Aplikační kód]
+    start((Start))
+    load_cli[Načtení parametrů z CLI]
+    run_tracee[Spuštění sledovaného]
+    serialize[Serializace dat a výpis na disk]
+    sys_save[Uložení systémového volání]
+    sys_error[Uložení chyby]
+    is_fatal{{Je chyba fatální?}}
+    pend(((Konec)))
+    end
+    subgraph lib [Knihovní kód]
+    sys_read[Načtení systémového volání]
+    error_occured{{Došlo k chybě?}}
+    is_alive{{Žije sledovaný?}}
+    end
+    
+    start --> load_cli
+    load_cli --> run_tracee
+    run_tracee --> is_alive
+    is_alive -- ano --> sys_read
+    sys_read --> error_occured
+
+    is_alive -- ne --> serialize
+
+    error_occured -- ano --> sys_error
+    error_occured -- ne --> sys_save
+    sys_error --> is_fatal
+
+    is_fatal -- ano --> serialize
+    is_fatal -- ne --> is_alive
+    sys_save --> is_alive
+
+    serialize --> pend
+
+    linkStyle 6,7 stroke:green,color:green
+    linkStyle 10 stroke:red,color:red
+    linkStyle 11 stroke:purple
+    linkStyle 5 stroke:darkorange,color:darkorange
