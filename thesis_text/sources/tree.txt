@@ -1,0 +1,16 @@
+BouboTrace
+├── Cargo.toml
+│    { Soubor se závislostmi a verzí používaný Cargo
+├── README.md
+│    { Obsahuje instrukce pro spuštění
+├── src
+│    { Zdrojové kódy BouboTrace
+├── test_programs
+│    { Programy použité v testech
+├── tests
+│    { Zdrojový kód pro testy a jejich snapshoty
+└── thesis_text
+    ├── thesis.pdf
+    │    { Práce v PDF
+    └── thesis.typ
+         { Zdrojový kód práce

@@ -120,13 +120,22 @@ proc-pid-mem:
     date: 2025-03-31
 
 
+house-of-leaves:
+  type: book
+  title: "House of Leaves: The Remastered Full-Color Edition"
+  author: Danielewski, Mark Z.
+  edition: 2
+  date: 2000-03-07
+  publisher: Pantheon
+  serial-number:
+    isbn: 9780375703768
 ptrace-abi:
   type: repository
   title: Linux kernel source tree
   edition: 6.15-rc3
   editor: Torvalds, Linus
   url:
-    value: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/uapi/asm/ptrace-abi.h?h=v6.15-rc3
+    value: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/uapi/asm/ptrace-abi.h?h=v6.15-rc3#n33
     date: 2025-04-27
 
 user64:
@@ -135,7 +144,7 @@ user64:
   edition: 6.15-rc3
   editor: Torvalds, Linus
   url:
-    value: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/user_64.h?h=v6.15-rc3
+    value: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/user_64.h?h=v6.15-rc3#n103
     date: 2025-04-27
 
 elf-diagram:

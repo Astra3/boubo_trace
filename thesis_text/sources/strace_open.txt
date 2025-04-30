@@ -1,6 +1,6 @@
 +++ zde jsem vynechal 29 systémových volání +++
 openat(AT_FDCWD, "test.txt", O_RDWR|O_CREAT|O_TRUNC, 0700) = 3
-write(3, "Hello warld!\n", 13)          = 13
+write(3, "Hello world!\n", 13)          = 13
 close(3)                                = 0
 exit_group(0)                           = ?
 +++ exited with 0 +++
