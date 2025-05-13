@@ -2,12 +2,13 @@
 mod tests {
     use std::{process::Command, sync::Once};
 
+    use boubo_trace::{
+        syscall::{Syscall, SyscallIter, SyscallIterOpts, SyscallParseError},
+        tracee::Tracee,
+    };
     use insta::glob;
-    use nix::
-        unistd::Pid
-    ;
+    use nix::unistd::Pid;
     use spawn_ptrace::CommandPtraceSpawn;
-    use boubo_trace::{syscall::{Syscall, SyscallIter, SyscallIterOpts, SyscallParseError}, tracee::Tracee};
     static INIT: Once = Once::new();
 
     fn initialize() {

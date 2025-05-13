@@ -5,7 +5,7 @@ use std::{
 };
 
 use libc::{
-    c_long, user_regs_struct, PTRACE_EVENT_CLONE, PTRACE_EVENT_EXEC, PTRACE_EVENT_FORK, RAX,
+    PTRACE_EVENT_CLONE, PTRACE_EVENT_EXEC, PTRACE_EVENT_FORK, RAX, c_long, user_regs_struct,
 };
 use log::{debug, info, trace, warn};
 use nix::{
@@ -13,8 +13,8 @@ use nix::{
     sys::{
         ptrace,
         signal::Signal,
-        uio::{process_vm_readv, RemoteIoVec},
-        wait::{waitpid, WaitStatus},
+        uio::{RemoteIoVec, process_vm_readv},
+        wait::{WaitStatus, waitpid},
     },
     unistd::Pid,
 };
@@ -89,7 +89,7 @@ impl Tracee {
                 if signal == Signal::SIGCHLD {
                     trace!("continuing on SIGCHLD");
                     self.syscall()?;
-                    return self.wait_for_stop()
+                    return self.wait_for_stop();
                 }
                 Ok(WaitEvents::Stopped(signal))
             }
@@ -111,7 +111,9 @@ impl Tracee {
 
     pub fn memcpy(&self, base: usize, len: usize) -> ErrnoResult<Vec<u8>> {
         let mut data = vec![0; len];
-        if base == 0 { return Ok(vec![0]) }
+        if base == 0 {
+            return Ok(vec![0]);
+        }
         process_vm_readv(
             self.pid,
             &mut [IoSliceMut::new(&mut data)],
@@ -124,7 +126,9 @@ impl Tracee {
     where
         T: Clone + Copy,
     {
-        if base == 0 { return Ok(None) }
+        if base == 0 {
+            return Ok(None);
+        }
         let bytes = self.memcpy(base, std::mem::size_of::<T>())?;
         let (_, sock_addr, _) = unsafe { bytes.align_to::<T>() };
         Ok(Some(sock_addr[0]))
