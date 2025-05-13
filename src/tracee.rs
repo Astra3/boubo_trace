@@ -7,17 +7,18 @@ use std::{
 use libc::{
     PTRACE_EVENT_CLONE, PTRACE_EVENT_EXEC, PTRACE_EVENT_FORK, RAX, c_long, user_regs_struct,
 };
-use log::{debug, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use nix::{
     errno::Errno,
     sys::{
-        ptrace,
+        ptrace::{self},
         signal::Signal,
         uio::{RemoteIoVec, process_vm_readv},
         wait::{WaitStatus, waitpid},
     },
     unistd::Pid,
 };
+use x86::debugregs;
 
 use crate::syscall::{SyscallDiscriminants, SyscallParseError};
 
@@ -258,9 +259,46 @@ impl Tracee {
         Ok(None)
     }
 
+    // this isn't gonna be compatible outside of x86, just like many other code around here
+    pub fn add_local_breakpoint(&self, break_address: usize) -> ErrnoResult<()> {
+        let break_register = debugregs::Breakpoint::Dr0;
+        let mut dr7 = debugregs::Dr7::default();
+        dr7.configure_bp(
+            break_register,
+            debugregs::BreakCondition::Instructions,
+            debugregs::BreakSize::Bytes1,
+        );
+        dr7.enable_bp(break_register, false);
+
+        self.write_user(debugreg_offset(0), break_address as i64)?;
+        self.write_user(debugreg_offset(7), dr7.0 as i64)?;
+        Ok(())
+    }
+
+    pub fn check_break(&self) -> ErrnoResult<()> {
+        let dr6 = self.read_user(debugreg_offset(6))?;
+        let dr6 = debugregs::Dr6::from_bits_truncate(dr6 as usize);
+        if !dr6.contains(debugregs::Dr6::B0) {
+            error!("Breakpoint was not triggered when it was expected to trigger!");
+        }
+        Ok(())
+    }
+
     pub fn get_pid_string(&self) -> String {
         self.pid.to_string()
     }
+}
+
+const fn debugreg_offset(reg_pos: usize) -> usize {
+    if reg_pos >= 8 {
+        panic!("There are only 8 debug registers counting from DR0 to DR7.")
+    }
+    let user = std::mem::MaybeUninit::<libc::user>::uninit();
+    let ptr = user.as_ptr();
+
+    let ptr_start = ptr as *const u8;
+    let ptr_end = unsafe { std::ptr::addr_of!((*ptr).u_debugreg[reg_pos]) as *const u8 };
+    unsafe { ptr_end.offset_from(ptr_start) as usize }
 }
 
 pub fn parse_syscall_error(return_value: i64) -> Errno {
