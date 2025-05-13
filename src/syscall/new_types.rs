@@ -6,7 +6,7 @@ use nix::{
         stat::Mode,
     },
 };
-use serde::{ser::SerializeStruct, Serialize};
+use serde::{Serialize, ser::SerializeStruct};
 
 #[derive(Debug, Clone)]
 #[allow(non_camel_case_types)]
@@ -21,7 +21,6 @@ impl Serialize for sockaddr_ser {
         sock_addr.serialize_field("sa_family", &self.0.sa_family)?;
         sock_addr.serialize_field("sa_data", &self.0.sa_data)?;
         sock_addr.end()
-
     }
 }
 

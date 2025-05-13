@@ -1,4 +1,7 @@
-use nix::{errno::Errno, sys::{signal::Signal, wait::WaitStatus}};
+use nix::{
+    errno::Errno,
+    sys::{signal::Signal, wait::WaitStatus},
+};
 use serde::Serialize;
 use thiserror::Error;
 
@@ -29,4 +32,3 @@ impl Serialize for SyscallParseError {
         serializer.serialize_str(&self.to_string())
     }
 }
-

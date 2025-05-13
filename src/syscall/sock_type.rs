@@ -9,8 +9,12 @@ pub struct SocketType {
 impl From<i32> for SocketType {
     fn from(value: i32) -> Self {
         let flags = socket::SockFlag::from_bits_truncate(value);
-        let sock_type = socket::SockType::try_from(value & !socket::SockFlag::all().bits()).unwrap();
+        let sock_type =
+            socket::SockType::try_from(value & !socket::SockFlag::all().bits()).unwrap();
 
-        SocketType { r#type: sock_type, flags }
+        SocketType {
+            r#type: sock_type,
+            flags,
+        }
     }
 }

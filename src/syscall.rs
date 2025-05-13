@@ -1,26 +1,29 @@
 use core::str;
 use std::io;
 
-use elf::{endian::AnyEndian, ElfBytes};
-use libc::{sockaddr, socklen_t, RIP};
+use elf::{ElfBytes, endian::AnyEndian};
+use libc::{RIP, sockaddr, socklen_t};
 use log::{debug, error, trace, warn};
-use new_types::{sockaddr_ser, AddressFamilySer, ModeSer, OFlagSer, SocketType};
+use new_types::{AddressFamilySer, ModeSer, OFlagSer, SocketType, sockaddr_ser};
 use nix::{
     errno::Errno,
     fcntl,
     sys::{
-        ptrace::Options, signal::Signal, socket::{self}, stat
+        ptrace::Options,
+        signal::Signal,
+        socket::{self},
+        stat,
     },
 };
 pub use parse_error::SyscallParseError;
 pub use syscall_args::SyscallArgs;
 use thiserror::Error;
 
-use crate::tracee::{parse_syscall_error, Tracee, WaitEvents};
+use crate::tracee::{Tracee, WaitEvents, parse_syscall_error};
 
+mod new_types;
 pub mod parse_error;
 mod sock_type;
-mod new_types;
 pub mod syscall_args;
 
 // FIXME many syscalls don't store their return values
@@ -131,7 +134,9 @@ impl Syscall {
             41 => {
                 tracee.parse_return(SyscallDisc::Socket)?;
                 Ok(Syscall::Socket {
-                    domain: socket::AddressFamily::from_i32(args.0 as i32).unwrap().into(),
+                    domain: socket::AddressFamily::from_i32(args.0 as i32)
+                        .unwrap()
+                        .into(),
                     r#type: SocketType::from(args.1 as i32),
                     protocol: args.2 as i32,
                 })
@@ -148,7 +153,7 @@ impl Syscall {
                 Ok(Syscall::Accept {
                     sockfd: args.0 as i32,
                     addr: sock_addr.map(Into::into),
-                    addrlen 
+                    addrlen,
                 })
             }
             49 => {

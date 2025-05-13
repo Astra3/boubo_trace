@@ -1,19 +1,19 @@
 use std::{
-    fs::{canonicalize, File},
+    fs::{File, canonicalize},
     io::{self, BufWriter},
     path::PathBuf,
     process::Command,
 };
 
-use clap::Parser;
-use log::{debug, error, info, LevelFilter};
-use nix::unistd::Pid;
-use serde::Serialize;
-use spawn_ptrace::CommandPtraceSpawn;
 use boubo_trace::{
     syscall::{Syscall, SyscallIter, SyscallIterOpts, SyscallParseError},
     tracee::Tracee,
 };
+use clap::Parser;
+use log::{LevelFilter, debug, error, info};
+use nix::unistd::Pid;
+use serde::Serialize;
+use spawn_ptrace::CommandPtraceSpawn;
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -161,12 +161,14 @@ impl App {
     }
 
     fn serialize_json<T, W>(&self, writer: W, value: &T) -> Result<(), serde_json::Error>
-        where W: io::Write, T: Serialize {
-            if self.args.pretty_output {
-                serde_json::to_writer_pretty(writer, value)
-
-            } else {
-                serde_json::to_writer(writer, value)
-            }
+    where
+        W: io::Write,
+        T: Serialize,
+    {
+        if self.args.pretty_output {
+            serde_json::to_writer_pretty(writer, value)
+        } else {
+            serde_json::to_writer(writer, value)
+        }
     }
 }
