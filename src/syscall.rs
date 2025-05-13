@@ -2,7 +2,7 @@ use core::str;
 use std::io;
 
 use elf::{ElfBytes, endian::AnyEndian};
-use libc::{RIP, sockaddr, socklen_t};
+use libc::{sockaddr, socklen_t};
 use log::{debug, error, trace, warn};
 use new_types::{AddressFamilySer, ModeSer, OFlagSer, SocketType, sockaddr_ser};
 use nix::{
@@ -308,20 +308,14 @@ impl SyscallIter {
             let entry_point = elf.ehdr.e_entry;
 
             let main_address = tracee.translate_address(entry_point as usize)?.unwrap();
-            debug!("creating breakpoint on main() at address {main_address:#X}");
-            let original_word = tracee.read(main_address)?;
-            trace!("original word: {original_word:#X}");
-            // this isn't gonna be compatible outside of x86
-            tracee.write(main_address, 0xCC)?;
+            debug!("creating hardware breakpoint on main() at address {main_address:#X}");
+            tracee.add_local_breakpoint(main_address)?;
 
             tracee.cont()?;
             match tracee.wait_for_stop() {
                 Ok(WaitEvents::Stopped(Signal::SIGTRAP)) => {
                     trace!("stopped on main");
-                    // decrementing RIP
-                    let rip = tracee.read_user((RIP * 8) as usize)? as usize;
-                    tracee.write_user((RIP * 8) as usize, (rip - 1) as i64)?;
-                    tracee.write(main_address, original_word)?;
+                    tracee.check_break()?;
                 }
                 _ => panic!(),
             }
