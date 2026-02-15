@@ -278,6 +278,7 @@ impl Tracee {
     pub fn check_break(&self) -> ErrnoResult<()> {
         let dr6 = self.read_user(debugreg_offset(6))?;
         let dr6 = debugregs::Dr6::from_bits_truncate(dr6 as usize);
+        trace!("DR6 flags: {dr6:?}");
         if !dr6.contains(debugregs::Dr6::B0) {
             error!("Breakpoint was not triggered when it was expected to trigger!");
         }
