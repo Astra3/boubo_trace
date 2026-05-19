@@ -18,7 +18,7 @@ use nix::{
     },
     unistd::Pid,
 };
-use x86::debugregs;
+use x86_64::registers::debug::{BreakpointCondition, BreakpointSize, DebugAddressRegister, DebugAddressRegisterNumber, Dr6Flags, Dr7Flags, Dr7Value};
 
 use crate::syscall::{SyscallDiscriminants, SyscallParseError};
 
@@ -62,6 +62,7 @@ pub struct Tracee {
 }
 
 impl Tracee {
+    #[must_use] 
     pub fn new(pid: Pid) -> Tracee {
         Tracee {
             pid,
@@ -110,7 +111,8 @@ impl Tracee {
         }
     }
 
-    pub fn memcpy(&self, base: usize, len: usize) -> ErrnoResult<Vec<u8>> {
+    pub fn memcpy(&self, base: u64, len: usize) -> ErrnoResult<Vec<u8>> {
+        let base = base.try_into().unwrap();
         let mut data = vec![0; len];
         if base == 0 {
             return Ok(vec![0]);
@@ -123,7 +125,7 @@ impl Tracee {
         Ok(data)
     }
 
-    pub fn memcpy_struct<T>(&self, base: usize) -> ErrnoResult<Option<T>>
+    pub fn memcpy_struct<T>(&self, base: u64) -> ErrnoResult<Option<T>>
     where
         T: Clone + Copy,
     {
@@ -135,7 +137,7 @@ impl Tracee {
         Ok(Some(sock_addr[0]))
     }
 
-    pub fn memcpy_until<T>(&self, base: usize, function: T) -> ErrnoResult<Vec<u8>>
+    pub fn memcpy_until<T>(&self, base: u64, function: T) -> ErrnoResult<Vec<u8>>
     where
         T: Fn(&u8) -> bool,
     {
@@ -145,6 +147,8 @@ impl Tracee {
         let mut data = vec![];
         let mut buf = [0; BUFFER_SIZE];
         let mut total_bytes_read = 0usize;
+
+        let base: usize = base.try_into().unwrap();
 
         while data.len() < MAX_BYTES_CSTRING {
             total_bytes_read += process_vm_readv(
@@ -158,7 +162,7 @@ impl Tracee {
 
             // if let Some(index) = buf.iter().position(|num| *num == 0) {
             if let Some(index) = buf.iter().position(&function) {
-                data.extend_from_slice(&buf[..index + 1]);
+                data.extend_from_slice(&buf[..=index]);
                 break;
             }
             data.extend_from_slice(&buf);
@@ -169,7 +173,7 @@ impl Tracee {
         Ok(data)
     }
 
-    pub fn strcpy(&self, base: usize) -> ErrnoResult<Vec<u8>> {
+    pub fn strcpy(&self, base: u64) -> ErrnoResult<Vec<u8>> {
         self.memcpy_until(base, |num| *num == 0)
     }
 
@@ -208,17 +212,14 @@ impl Tracee {
         debug!("parsing return...");
         self.syscall()?;
         self.wait_for_stop()?;
-        trace!("exit regs: {:?}", ptrace::getregs(self.pid)?);
-
-        let ret = self.read_rax()?;
-        debug!("return value: {ret}");
-        if ret < 0 {
-            return Err(SyscallParseError::SyscallError {
-                syscall,
-                error: parse_syscall_error(ret),
-            });
+        let syscall_info: PtraceSyscallInfo = self.syscall_info()?.into();
+        let Some(PtraceSyscallInfoData::Exit { return_value, is_error }) = syscall_info.data else {
+            return Err(SyscallParseError::InvalidSyscallInfo(syscall_info))
+        };
+        if is_error {
+            return Err(SyscallParseError::SyscallError { syscall, error: parse_syscall_error(return_value) })
         }
-        Ok(ret)
+        Ok(return_value)
     }
 
     pub fn syscall(&mut self) -> ErrnoResult<()> {
@@ -237,10 +238,10 @@ impl Tracee {
             let line = line?;
             let mut it = line.split_whitespace();
             let section = it.next().unwrap();
-            let mut numbers = section.split("-");
 
-            let start = usize::from_str_radix(numbers.next().unwrap(), 16).unwrap();
-            let stop = usize::from_str_radix(numbers.next().unwrap(), 16).unwrap();
+            let (start, stop) = section.split_once('-').unwrap();
+            let start = usize::from_str_radix(start, 16).unwrap();
+            let stop = usize::from_str_radix(stop, 16).unwrap();
 
             // permissions
             it.next();
@@ -253,7 +254,6 @@ impl Tracee {
             if requested_addr <= offset + difference {
                 return Ok(Some(start + requested_addr - offset));
             }
-            continue;
         }
 
         Ok(None)
@@ -261,47 +261,105 @@ impl Tracee {
 
     // this isn't gonna be compatible outside of x86, just like many other code around here
     pub fn add_local_breakpoint(&self, break_address: usize) -> ErrnoResult<()> {
-        let break_register = debugregs::Breakpoint::Dr0;
-        let mut dr7 = debugregs::Dr7::default();
-        dr7.configure_bp(
-            break_register,
-            debugregs::BreakCondition::Instructions,
-            debugregs::BreakSize::Bytes1,
-        );
-        dr7.enable_bp(break_register, false);
+        // break_address gets written to Dr0
+        // let break_register = Dr0::write(break_address.try_into().unwrap());
+        let bits = self.read_user(debugreg_offset(7))?;
+        let dr7 = Dr7Value::from_bits(bits.cast_unsigned());
+        trace!("dr7 value: {dr7:?}");
+        let mut dr7 = Dr7Value::from(Dr7Flags::LOCAL_BREAKPOINT_0_ENABLE);
+        dr7.set_condition(DebugAddressRegisterNumber::Dr0, BreakpointCondition::InstructionExecution);
+        dr7.set_size(DebugAddressRegisterNumber::Dr0, BreakpointSize::Length1B);
 
         self.write_user(debugreg_offset(0), break_address as i64)?;
-        self.write_user(debugreg_offset(7), dr7.0 as i64)?;
+        self.write_user(debugreg_offset(7), dr7.bits().cast_signed())?;
         Ok(())
     }
 
     pub fn check_break(&self) -> ErrnoResult<()> {
         let dr6 = self.read_user(debugreg_offset(6))?;
-        let dr6 = debugregs::Dr6::from_bits_truncate(dr6 as usize);
+        let dr6 = Dr6Flags::from_bits_truncate(dr6.cast_unsigned());
         trace!("DR6 flags: {dr6:?}");
-        if !dr6.contains(debugregs::Dr6::B0) {
+        if !dr6.contains(Dr6Flags::TRAP0) {
             error!("Breakpoint was not triggered when it was expected to trigger!");
         }
         Ok(())
     }
 
+    pub fn syscall_info(&self) -> ErrnoResult<libc::ptrace_syscall_info> {
+        ptrace::syscall_info(self.pid)
+    }
+
+    #[must_use] 
     pub fn get_pid_string(&self) -> String {
         self.pid.to_string()
     }
 }
 
-const fn debugreg_offset(reg_pos: usize) -> usize {
-    if reg_pos >= 8 {
-        panic!("There are only 8 debug registers counting from DR0 to DR7.")
+#[derive(Debug, Clone, Copy)]
+pub struct PtraceSyscallInfo {
+    pub flags: u16,
+    pub arch: u32,
+    pub instruction_pointer: u64,
+    pub stack_pointer: u64,
+    pub data: Option<PtraceSyscallInfoData>
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum PtraceSyscallInfoData {
+    Entry {
+        syscall_number: u64,
+        args: [u64; 6]
+    },
+    Exit {
+        return_value: i64,
+        is_error: bool,
+    },
+    Seccomp {
+        syscall_number: u64,
+        args: [u64; 6],
+        ret_data: u32,
     }
+}
+
+impl From<libc::ptrace_syscall_info> for PtraceSyscallInfo {
+    fn from(value: libc::ptrace_syscall_info) -> Self {
+        let data = match value.op {
+            libc::PTRACE_SYSCALL_INFO_ENTRY => {
+                let data = unsafe { value.u.entry };
+                Some(PtraceSyscallInfoData::Entry { syscall_number: data.nr, args: data.args })
+            },
+            libc::PTRACE_SYSCALL_INFO_EXIT => {
+                let data = unsafe { value.u.exit };
+                Some(PtraceSyscallInfoData::Exit { return_value: data.sval, is_error: data.is_error != 0 })
+            },
+            libc::PTRACE_SYSCALL_INFO_SECCOMP => {
+                let data = unsafe { value.u.seccomp };
+                Some(PtraceSyscallInfoData::Seccomp { syscall_number: data.nr, args: data.args, ret_data: data.ret_data })
+            },
+            libc::PTRACE_SYSCALL_INFO_NONE => None,
+            _ => panic!("{} is invalid value for ptrace_syscall_info.op", value.op)
+        };
+        PtraceSyscallInfo {
+            flags: value.flags,
+            arch: value.arch,
+            instruction_pointer: value.instruction_pointer,
+            stack_pointer: value.stack_pointer,
+            data,
+        }
+    }
+}
+
+const fn debugreg_offset(reg_pos: usize) -> usize {
+    assert!(reg_pos < 8, "There are only 8 debug registers counting from DR0 to DR7.");
     let user = std::mem::MaybeUninit::<libc::user>::uninit();
     let ptr = user.as_ptr();
 
-    let ptr_start = ptr as *const u8;
-    let ptr_end = unsafe { std::ptr::addr_of!((*ptr).u_debugreg[reg_pos]) as *const u8 };
-    unsafe { ptr_end.offset_from(ptr_start) as usize }
+    let ptr_start = ptr.cast::<u8>();
+    let ptr_end = unsafe { std::ptr::addr_of!((*ptr).u_debugreg[reg_pos]).cast::<u8>() };
+    unsafe { ptr_end.offset_from(ptr_start).cast_unsigned() }
 }
 
+#[must_use] 
 pub fn parse_syscall_error(return_value: i64) -> Errno {
     Errno::from_raw(-return_value as i32)
 }

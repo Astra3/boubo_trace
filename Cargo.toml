@@ -9,20 +9,29 @@ license = "GPL-3.0-or-later"
 [dependencies]
 anyhow = "1.0.86"
 clap = { version = "4.5.23", features = ["derive"] }
-elf = "0.7.4"
+elf = "0.8.0"
 env_logger = "0.11.5"
-libc = "0.2.158"
+libc = { version = "0.2.158", features = ["extra_traits"] }
 log = "0.4"
-nix = { version = "0.30.0", features = ["ptrace", "uio", "fs", "sched", "socket", "net"] }
-serde = { version = "1.0.210", features = ["derive"]}
+nix = { version = "0.31.3", features = ["ptrace", "uio", "fs", "sched", "socket", "net"] }
+rkyv = "0.8.16"
 serde_json = "1.0.128"
 spawn-ptrace = "0.1.2"
-strum = { version = "0.27.0", features = ["derive"]}
+strum = { version = "0.28.0", features = ["derive"]}
 thiserror = "2.0.12"
-x86 = "0.52.0"
+x86_64 = { version = "0.15.4", default-features = false, features = ["instructions"] }
 
 [dev-dependencies]
 insta = { version = "1.41.1", features = ["glob", "json"] }
+
+[lints.clippy]
+pedantic = {level = "warn", priority = -1}
+cast_possible_truncation = "allow"
+missing_panics_doc = "allow"
+missing_errors_doc = "allow"
+struct_field_names = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
 
 [profile.dev.package]
 insta.opt-level = 3

@@ -3,7 +3,7 @@ use std::io;
 
 use elf::{ElfBytes, endian::AnyEndian};
 use libc::{sockaddr, socklen_t};
-use log::{debug, error, trace, warn};
+use log::{debug, trace, warn};
 use new_types::{AddressFamilySer, ModeSer, OFlagSer, SocketType, sockaddr_ser};
 use nix::{
     errno::Errno,
@@ -19,7 +19,7 @@ pub use parse_error::SyscallParseError;
 pub use syscall_args::SyscallArgs;
 use thiserror::Error;
 
-use crate::tracee::{Tracee, WaitEvents, parse_syscall_error};
+use crate::tracee::{PtraceSyscallInfo, PtraceSyscallInfoData, Tracee, WaitEvents, parse_syscall_error};
 
 mod new_types;
 pub mod parse_error;
@@ -90,9 +90,12 @@ pub enum Syscall {
     ExitGroup {
         status: i32,
     },
+    Unlink {
+        pathname: Vec<u8>,
+    },
     Unknown {
         id: u64,
-        args: SyscallArgs,
+        args: [u64; 6],
         return_value: i64,
     },
 }
@@ -100,86 +103,88 @@ pub enum Syscall {
 type SyscallDisc = SyscallDiscriminants;
 
 impl Syscall {
+    #[allow(clippy::too_many_lines, reason = "I will not be able to make this shorter")]
     pub fn parse(tracee: &mut Tracee) -> Result<Syscall, SyscallParseError> {
         debug!("Parsing syscall entry...");
         tracee.wait_for_stop()?;
-        let regs = tracee.getregs()?;
+        let syscall_info: PtraceSyscallInfo = tracee.syscall_info()?.into();
+        let Some(PtraceSyscallInfoData::Entry { syscall_number, args }) = syscall_info.data else {
+            return Err(SyscallParseError::InvalidSyscallInfo(syscall_info))
+        };
         // TODO this could read /proc/pid/syscall
-        let args = SyscallArgs::new(&regs);
-        trace!("registers: {regs:?}");
         trace!("args: {args:?}");
-        match regs.orig_rax {
-            0 => {
+        match syscall_number.cast_signed() {
+            libc::SYS_read => {
                 let read = tracee.parse_return(SyscallDisc::Read)?;
-                let bytes = tracee.memcpy(args.1, read as usize)?;
+                let bytes = tracee.memcpy(args[1], read as usize)?;
                 Ok(Syscall::Read {
-                    fd: args.0 as i32,
+                    fd: args[0] as i32,
                     read_bytes: bytes,
-                    requested_count: args.2,
+                    requested_count: args[2].try_into().unwrap(),
                 })
             }
-            1 => {
-                let text = tracee.memcpy(args.1, args.2)?;
+            libc::SYS_write => {
+                let text = tracee.memcpy(args[1], args[2] as usize)?;
                 bytes_as_string(&text);
                 tracee.parse_return(SyscallDisc::Write)?;
                 Ok(Syscall::Write {
-                    fd: args.0 as i32,
+                    fd: args[0] as i32,
                     buf: text,
                 })
             }
-            3 => {
+            libc::SYS_close => {
                 tracee.parse_return(SyscallDisc::Close)?;
-                Ok(Syscall::Close { fd: args.0 as i32 })
+                Ok(Syscall::Close { fd: args[0] as i32 })
             }
-            41 => {
+            libc::SYS_socket => {
                 tracee.parse_return(SyscallDisc::Socket)?;
                 Ok(Syscall::Socket {
-                    domain: socket::AddressFamily::from_i32(args.0 as i32)
+                    domain: socket::AddressFamily::from_i32(args[0] as i32)
                         .unwrap()
                         .into(),
-                    r#type: SocketType::from(args.1 as i32),
-                    protocol: args.2 as i32,
+                    r#type: SocketType::from(args[1] as i32),
+                    protocol: args[2] as i32,
                 })
             }
-            43 => {
-                let addrlen = if args.1 == 0 || args.2 == 0 {
+            libc::SYS_accept => {
+                let addrlen = if args[1] == 0 || args[2] == 0 {
                     None
                 } else {
-                    let bytes = tracee.memcpy(args.2, std::mem::size_of::<socklen_t>())?;
+                    let bytes = tracee.memcpy(args[2], std::mem::size_of::<socklen_t>())?;
                     Some(socklen_t::from_ne_bytes(bytes.try_into().unwrap()))
                 };
                 tracee.parse_return(SyscallDisc::Accept)?;
-                let sock_addr = tracee.memcpy_struct::<sockaddr>(args.1)?;
+                let sock_addr = tracee.memcpy_struct::<sockaddr>(args[1])?;
                 Ok(Syscall::Accept {
-                    sockfd: args.0 as i32,
+                    sockfd: args[0] as i32,
                     addr: sock_addr.map(Into::into),
                     addrlen,
                 })
             }
-            49 => {
-                let sock_addr = tracee.memcpy_struct::<sockaddr>(args.1)?;
+            libc::SYS_bind => {
+                let sock_addr = tracee.memcpy_struct::<sockaddr>(args[1])?;
                 tracee.parse_return(SyscallDisc::Bind)?;
                 Ok(Syscall::Bind {
-                    sockfd: args.0 as i32,
+                    sockfd: args[0] as i32,
                     addr: sock_addr.map(Into::into),
-                    addrlen: args.2 as socklen_t,
+                    addrlen: args[2] as socklen_t,
                 })
             }
-            50 => {
+            libc::SYS_listen => {
                 tracee.parse_return(SyscallDisc::Listen)?;
                 Ok(Syscall::Listen {
-                    sockfd: args.0 as i32,
-                    backlog: args.1 as i32,
+                    sockfd: args[0] as i32,
+                    backlog: args[1] as i32,
                 })
             }
-            56 => {
+            libc::SYS_clone => {
                 // this is ONLY compatible with x86-64 and some other weird ass architectures
                 let clone = Syscall::Clone {
-                    flags: args.0 as u64,
-                    stack: args.1,
-                    parent_tid: args.2,
-                    child_tid: args.3,
-                    tls: args.4 as u64,
+                    flags: args[0],
+                    stack: args[1].try_into().unwrap(),
+                    parent_tid: args[2].try_into().unwrap(),
+                    child_tid: args[3].try_into().unwrap(),
+                    tls: args[4],
                 };
                 tracee.parse_return(SyscallDisc::Clone)?;
                 Ok(clone)
@@ -198,48 +203,52 @@ impl Syscall {
                 //     }
                 // }
             }
-            59 => {
-                let pathname = tracee.strcpy(args.0)?;
+            #[allow(clippy::similar_names)]
+            libc::SYS_execve => {
+                let pathname = tracee.strcpy(args[0])?;
                 bytes_as_string(&pathname);
                 // when the process was called and what was its cmdline
-                let argv = tracee.strcpy(args.1)?;
-                let envp = tracee.strcpy(args.2)?;
+                let argv = tracee.strcpy(args[1])?;
+                let envp = tracee.strcpy(args[2])?;
                 tracee.syscall()?;
                 // tracee.parse_return(SyscallDisc::Execve)?;
                 // Ok(Syscall::Execve { pathname,  argv, envp })
-                match tracee.wait_for_stop()? {
-                    WaitEvents::Exec => {
-                        tracee.parse_return(SyscallDisc::Execve)?;
-                        Ok(Syscall::Execve {
-                            pathname,
-                            argv,
-                            envp,
-                        })
-                    }
-                    _ => {
-                        let return_value = tracee.read_rax()?;
-                        Err(SyscallParseError::SyscallError {
-                            syscall: SyscallDisc::Execve,
-                            error: parse_syscall_error(return_value),
-                        })
-                    }
+                if let WaitEvents::Exec = tracee.wait_for_stop()? {
+                    tracee.parse_return(SyscallDisc::Execve)?;
+                    Ok(Syscall::Execve {
+                        pathname,
+                        argv,
+                        envp,
+                    })
+                } else {
+                    let return_value = tracee.read_rax()?;
+                    Err(SyscallParseError::SyscallError {
+                        syscall: SyscallDisc::Execve,
+                        error: parse_syscall_error(return_value),
+                    })
                 }
             }
-            231 => Ok(Syscall::ExitGroup {
-                status: args.0 as i32,
+            libc::SYS_exit_group => Ok(Syscall::ExitGroup {
+                status: args[0] as i32,
             }),
-            257 => {
-                let pathname = tracee.strcpy(args.1)?;
+            libc::SYS_openat => {
+                let pathname = tracee.strcpy(args[1])?;
                 bytes_as_string(&pathname);
                 tracee.parse_return(SyscallDisc::Openat)?;
                 Ok(Syscall::Openat {
-                    dirfd: args.0 as i32,
+                    dirfd: args[0] as i32,
                     pathname,
-                    // flags: args.2 as i32,
-                    flags: fcntl::OFlag::from_bits(args.2 as i32).unwrap().into(),
-                    // mode: args.3 as u32,
-                    mode: stat::Mode::from_bits(args.3 as u32).unwrap().into(),
+                    // flags: args[2] as i32,
+                    flags: fcntl::OFlag::from_bits(args[2] as i32).unwrap().into(),
+                    // mode: args[3] as u32,
+                    mode: stat::Mode::from_bits(args[3] as u32).unwrap().into(),
                 })
+            }
+            libc::SYS_unlink => {
+                let pathname = tracee.strcpy(args[1])?;
+                bytes_as_string(&pathname);
+                tracee.parse_return(SyscallDisc::Unlink)?;
+                Ok(Syscall::Unlink { pathname })
             }
             _ => {
                 warn!("Unknown syscall was called");
@@ -247,7 +256,7 @@ impl Syscall {
                 tracee.wait_for_stop()?;
                 let return_value = tracee.read_rax()?;
                 Ok(Syscall::Unknown {
-                    id: regs.orig_rax,
+                    id: syscall_number,
                     args,
                     return_value,
                 })
@@ -262,10 +271,12 @@ pub struct SyscallIterOpts {
 }
 
 impl SyscallIterOpts {
+    #[must_use]
     pub fn skip_to_main(mut self, value: bool) -> Self {
         self.skip_to_main = value;
         self
     }
+    #[must_use]
     pub fn kill_on_exit(mut self, value: bool) -> Self {
         self.kill_on_exit = value;
         self
@@ -292,7 +303,7 @@ pub enum SyscallIterError {
 pub struct SyscallIter(Tracee);
 
 impl SyscallIter {
-    pub fn new(mut tracee: Tracee, opts: SyscallIterOpts) -> Result<Self, SyscallIterError> {
+    pub fn new(mut tracee: Tracee, opts: &SyscallIterOpts) -> Result<Self, SyscallIterError> {
         let mut options = Options::PTRACE_O_TRACESYSGOOD
             // execve is more reliable with this
         | Options::PTRACE_O_TRACEEXEC;
@@ -334,7 +345,7 @@ impl Iterator for SyscallIter {
             }
             Err(err) => return Some(Err(err.into())),
             _ => (),
-        };
+        }
         match Syscall::parse(&mut self.0) {
             Ok(call) => Some(Ok(call)),
             Err(err) => Some(Err(err)),

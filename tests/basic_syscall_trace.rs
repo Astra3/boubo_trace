@@ -31,9 +31,9 @@ mod tests {
                 .current_dir(exec.parent().unwrap())
                 .spawn_ptrace()
                 .unwrap();
-            let pid = Pid::from_raw(cmd.id() as i32);
+            let pid = Pid::from_raw(cmd.id().cast_signed());
 
-            let it = SyscallIter::new(Tracee::new(pid), SyscallIterOpts::default());
+            let it = SyscallIter::new(Tracee::new(pid), &SyscallIterOpts::default());
             let called_syscalls: Vec<_> = it
                 .unwrap()
                 .filter(|call| !matches!(call, Ok(Syscall::Unknown { .. })))

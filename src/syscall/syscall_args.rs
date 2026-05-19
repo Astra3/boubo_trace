@@ -12,6 +12,7 @@ pub struct SyscallArgs(
 );
 
 impl SyscallArgs {
+    #[must_use] 
     pub fn new(regs: &user_regs_struct) -> SyscallArgs {
         SyscallArgs(
             regs.rdi as usize,

@@ -41,8 +41,8 @@ struct Args {
     ///
     /// -v for info messages, -vv for debug messages and -vvv for trace messages.
     ///
-    /// If you specify RUST_LOG environment variable, this flag is ignored and the variable's value
-    /// is used directly by env_logger.
+    /// If you specify `RUST_LOG` environment variable, this flag is ignored and the variable's value
+    /// is used directly by ``env_logger``.
     #[arg(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
     /// Arguments (argv) for <EXECUTABLE>
@@ -87,17 +87,14 @@ impl From<Result<Syscall, SyscallParseError>> for SyscallWrapper {
 
 fn main() -> Result<(), anyhow::Error> {
     let args = Args::parse();
-    match std::env::var_os("RUST_LOG") {
-        Some(_) => env_logger::init(),
-        None => {
-            let level = match args.verbose {
-                0 => LevelFilter::Warn,
-                1 => LevelFilter::Info,
-                2 => LevelFilter::Debug,
-                _ => LevelFilter::Trace,
-            };
-            env_logger::builder().filter_level(level).try_init()?;
-        }
+    if std::env::var_os("RUST_LOG").is_some() { env_logger::init() } else {
+        let level = match args.verbose {
+            0 => LevelFilter::Warn,
+            1 => LevelFilter::Info,
+            2 => LevelFilter::Debug,
+            _ => LevelFilter::Trace,
+        };
+        env_logger::builder().filter_level(level).try_init()?;
     }
     let app = App::new(args);
     app.call_cmd()?;
@@ -124,12 +121,12 @@ impl App {
         let process = cmd.spawn_ptrace()?;
 
         let mut called_syscalls = vec![];
-        let pid = Pid::from_raw(process.id() as i32);
+        let pid = Pid::from_raw(process.id().cast_signed());
         debug!("traced pid: {pid}");
 
         let opts = SyscallIterOpts::default().skip_to_main(!self.args.no_skip_to_main);
 
-        for call in SyscallIter::new(Tracee::new(pid), opts)? {
+        for call in SyscallIter::new(Tracee::new(pid), &opts)? {
             info!("Parsed syscall: {call:?}");
             called_syscalls.push(call);
         }
@@ -154,7 +151,7 @@ impl App {
                         error!("could not write to file at path: {path}");
                         return Err(err.into());
                     }
-                };
+                }
             }
         }
         Ok(())

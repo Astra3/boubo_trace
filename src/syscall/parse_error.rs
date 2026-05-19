@@ -5,6 +5,8 @@ use nix::{
 use serde::Serialize;
 use thiserror::Error;
 
+use crate::tracee::PtraceSyscallInfo;
+
 use super::SyscallDisc;
 
 #[derive(Error, Debug)]
@@ -22,6 +24,8 @@ pub enum SyscallParseError {
     // FIXME this isn't really a parse error
     #[error("tracee terminated by OS with signal {signal:?}")]
     Terminated { signal: Signal, core_dumped: bool },
+    #[error("syscall info struct did not contain the required entry, it contained {0:?}")]
+    InvalidSyscallInfo(PtraceSyscallInfo)
 }
 
 impl Serialize for SyscallParseError {
