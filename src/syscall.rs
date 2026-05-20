@@ -7,29 +7,32 @@ use log::{debug, trace, warn};
 use new_types::{AddressFamilySer, ModeSer, OFlagSer, SocketType, sockaddr_ser};
 use nix::{
     errno::Errno,
-    fcntl,
+    fcntl::{self, OFlag},
     sys::{
         ptrace::Options,
         signal::Signal,
-        socket::{self},
-        stat,
+        socket::{self, AddressFamily},
+        stat::{self, Mode},
     },
 };
 pub use parse_error::SyscallParseError;
-pub use syscall_args::SyscallArgs;
+use rkyv::with;
 use thiserror::Error;
 
 use crate::tracee::{PtraceSyscallInfo, PtraceSyscallInfoData, Tracee, WaitEvents, parse_syscall_error};
 
-mod new_types;
+pub mod new_types;
 pub mod parse_error;
 mod sock_type;
-pub mod syscall_args;
 
 // FIXME many syscalls don't store their return values
-#[derive(Debug, Clone, strum::EnumIs, strum::EnumDiscriminants, serde::Serialize)]
+#[derive(Debug, Clone, strum::EnumIs, strum::EnumDiscriminants, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, PartialEq, Eq)]
+#[rkyv(
+    // compare(PartialEq),
+    derive(Debug)
+)]
 #[strum_discriminants(derive(strum::Display))]
-#[serde(rename_all = "snake_case")]
+// #[serde(rename_all = "snake_case")]
 pub enum Syscall {
     Read {
         fd: i32,
@@ -44,7 +47,8 @@ pub enum Syscall {
         fd: i32,
     },
     Socket {
-        domain: AddressFamilySer,
+        #[rkyv(with = AddressFamilySer)]
+        domain: AddressFamily,
         r#type: SocketType,
         // TODO this could be SockProtocol from nix, if it was easy to parse
         protocol: i32,
@@ -53,7 +57,8 @@ pub enum Syscall {
         sockfd: i32,
         // TODO the representation of all sockaddr could be a bit more readable by parsing it
         // differently
-        addr: Option<sockaddr_ser>,
+        #[rkyv(with = with::Map<sockaddr_ser>)]
+        addr: Option<sockaddr>,
         addrlen: socklen_t,
     },
     Listen {
@@ -62,14 +67,18 @@ pub enum Syscall {
     },
     Accept {
         sockfd: i32,
-        addr: Option<sockaddr_ser>,
+        // #[rkyv(with = ArchivedOption<Archivedsockaddr>)]
+        #[rkyv(with = with::Map<sockaddr_ser>)]
+        addr: Option<sockaddr>,
         addrlen: Option<socklen_t>,
     },
     Openat {
         dirfd: i32,
         pathname: Vec<u8>,
-        flags: OFlagSer,
-        mode: ModeSer,
+        #[rkyv(with = OFlagSer)]
+        flags: OFlag,
+        #[rkyv(with = ModeSer)]
+        mode: Mode,
     },
     Execve {
         pathname: Vec<u8>,
@@ -103,7 +112,7 @@ pub enum Syscall {
 type SyscallDisc = SyscallDiscriminants;
 
 impl Syscall {
-    #[allow(clippy::too_many_lines, reason = "I will not be able to make this shorter")]
+    #[expect(clippy::too_many_lines, reason = "I will not be able to make this shorter")]
     pub fn parse(tracee: &mut Tracee) -> Result<Syscall, SyscallParseError> {
         debug!("Parsing syscall entry...");
         tracee.wait_for_stop()?;
@@ -140,9 +149,8 @@ impl Syscall {
                 tracee.parse_return(SyscallDisc::Socket)?;
                 Ok(Syscall::Socket {
                     domain: socket::AddressFamily::from_i32(args[0] as i32)
-                        .unwrap()
-                        .into(),
-                    r#type: SocketType::from(args[1] as i32),
+                        .unwrap(),
+                    r#type: SocketType::try_from(args[1] as i32)?,
                     protocol: args[2] as i32,
                 })
             }
@@ -157,7 +165,7 @@ impl Syscall {
                 let sock_addr = tracee.memcpy_struct::<sockaddr>(args[1])?;
                 Ok(Syscall::Accept {
                     sockfd: args[0] as i32,
-                    addr: sock_addr.map(Into::into),
+                    addr: sock_addr,
                     addrlen,
                 })
             }
@@ -166,7 +174,7 @@ impl Syscall {
                 tracee.parse_return(SyscallDisc::Bind)?;
                 Ok(Syscall::Bind {
                     sockfd: args[0] as i32,
-                    addr: sock_addr.map(Into::into),
+                    addr: sock_addr,
                     addrlen: args[2] as socklen_t,
                 })
             }
@@ -203,7 +211,6 @@ impl Syscall {
                 //     }
                 // }
             }
-            #[allow(clippy::similar_names)]
             libc::SYS_execve => {
                 let pathname = tracee.strcpy(args[0])?;
                 bytes_as_string(&pathname);
@@ -239,9 +246,9 @@ impl Syscall {
                     dirfd: args[0] as i32,
                     pathname,
                     // flags: args[2] as i32,
-                    flags: fcntl::OFlag::from_bits(args[2] as i32).unwrap().into(),
+                    flags: fcntl::OFlag::from_bits(args[2] as i32).unwrap(),
                     // mode: args[3] as u32,
-                    mode: stat::Mode::from_bits(args[3] as u32).unwrap().into(),
+                    mode: stat::Mode::from_bits(args[3] as u32).unwrap(),
                 })
             }
             libc::SYS_unlink => {

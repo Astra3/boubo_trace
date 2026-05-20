@@ -18,7 +18,7 @@ use nix::{
     },
     unistd::Pid,
 };
-use x86_64::registers::debug::{BreakpointCondition, BreakpointSize, DebugAddressRegister, DebugAddressRegisterNumber, Dr6Flags, Dr7Flags, Dr7Value};
+use x86_64::registers::debug::{BreakpointCondition, BreakpointSize, DebugAddressRegisterNumber, Dr6Flags, Dr7Flags, Dr7Value};
 
 use crate::syscall::{SyscallDiscriminants, SyscallParseError};
 

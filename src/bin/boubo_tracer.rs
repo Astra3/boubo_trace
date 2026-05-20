@@ -1,28 +1,25 @@
 use std::{
-    fs::{File, canonicalize},
-    io::{self, BufWriter},
-    path::PathBuf,
-    process::Command,
+    fs::{File, canonicalize}, io::Write, path::PathBuf, process::Command
 };
 
+use anyhow::bail;
 use boubo_trace::{
-    syscall::{Syscall, SyscallIter, SyscallIterOpts, SyscallParseError},
+    syscall::{
+        Syscall, SyscallIter, SyscallIterOpts, new_types::{NewTypeError, sockaddr_ser}
+    },
     tracee::Tracee,
 };
 use clap::Parser;
-use log::{LevelFilter, debug, error, info};
+use log::{LevelFilter, debug, info};
 use nix::unistd::Pid;
-use serde::Serialize;
 use spawn_ptrace::CommandPtraceSpawn;
 
 #[derive(Parser)]
 #[command(version, about)]
 struct Args {
-    /// Save serialized JSON to <FILE>
-    ///
-    /// Use '-' to write to stdout.
+    /// Save captured syscalls to <FILE>
     #[arg(long, short)]
-    output: Option<String>,
+    output: Option<PathBuf>,
     /// Use a prettier JSON formatter
     #[arg(long, short, requires = "output")]
     pretty_output: bool,
@@ -69,25 +66,11 @@ fn parse_dir(arg: &str) -> Result<PathBuf, &'static str> {
     Ok(path)
 }
 
-#[derive(serde::Serialize)]
-#[serde(untagged)]
-enum SyscallWrapper {
-    Syscall(Syscall),
-    Error { syscall_error: SyscallParseError },
-}
-
-impl From<Result<Syscall, SyscallParseError>> for SyscallWrapper {
-    fn from(value: Result<Syscall, SyscallParseError>) -> Self {
-        match value {
-            Ok(syscall) => SyscallWrapper::Syscall(syscall),
-            Err(syscall_error) => SyscallWrapper::Error { syscall_error },
-        }
-    }
-}
-
 fn main() -> Result<(), anyhow::Error> {
     let args = Args::parse();
-    if std::env::var_os("RUST_LOG").is_some() { env_logger::init() } else {
+    if std::env::var_os("RUST_LOG").is_some() {
+        env_logger::init();
+    } else {
         let level = match args.verbose {
             0 => LevelFilter::Warn,
             1 => LevelFilter::Info,
@@ -104,6 +87,13 @@ fn main() -> Result<(), anyhow::Error> {
 
 struct App {
     args: Args,
+}
+
+#[derive(Debug, rkyv::Serialize, rkyv::Archive, rkyv::Deserialize)]
+struct IncrementallyBuilding {
+    #[rkyv(with = rkyv::with::Map<sockaddr_ser>)]
+    flags: Option<libc::sockaddr>,
+    number: u8,
 }
 
 impl App {
@@ -127,45 +117,30 @@ impl App {
         let opts = SyscallIterOpts::default().skip_to_main(!self.args.no_skip_to_main);
 
         for call in SyscallIter::new(Tracee::new(pid), &opts)? {
-            info!("Parsed syscall: {call:?}");
-            called_syscalls.push(call);
-        }
-
-        if let Some(path) = &self.args.output {
-            let v: Vec<SyscallWrapper> = called_syscalls.into_iter().map(From::from).collect();
-            if path == "-" {
-                self.serialize_json(io::stdout().lock(), &v)?;
-            } else {
-                let file = match File::create(path) {
-                    Ok(file) => file,
-                    Err(err) => {
-                        error!("could not create file at path: {path}");
-                        return Err(err.into());
-                    }
-                };
-                // TODO bufwriter
-                let file = BufWriter::new(file);
-                match self.serialize_json(file, &v) {
-                    Ok(file) => file,
-                    Err(err) => {
-                        error!("could not write to file at path: {path}");
-                        return Err(err.into());
-                    }
-                }
+            match call {
+                Ok(call) => {
+                    info!("Parsed syscall: {call:?}");
+                    called_syscalls.push(call);
+                },
+                Err(err) => log::warn!("Error while parsing: {err}"),
             }
         }
-        Ok(())
-    }
+        
+        let bytes = rkyv::to_bytes::<NewTypeError>(&called_syscalls)?;
+        
+        println!("before archival: {called_syscalls:?}");
+        let res = rkyv::from_bytes::<Vec<Syscall>, NewTypeError>(&bytes)?;
+        println!("after recovery: {res:?}");
+        assert_eq!(called_syscalls, res);
 
-    fn serialize_json<T, W>(&self, writer: W, value: &T) -> Result<(), serde_json::Error>
-    where
-        W: io::Write,
-        T: Serialize,
-    {
-        if self.args.pretty_output {
-            serde_json::to_writer_pretty(writer, value)
-        } else {
-            serde_json::to_writer(writer, value)
+        if let Some(path) = &self.args.output {
+            if path.exists() {
+                bail!("File {} already exists!", path.display())
+            }
+            let bytes = rkyv::to_bytes::<NewTypeError>(&called_syscalls)?;
+            let mut file = File::create(path)?;
+            file.write_all(&bytes)?;
         }
+        Ok(())
     }
 }
