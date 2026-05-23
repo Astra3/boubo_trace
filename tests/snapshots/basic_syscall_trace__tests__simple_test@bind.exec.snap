@@ -2,28 +2,29 @@
 source: tests/basic_syscall_trace.rs
 expression: called_syscalls
 input_file: test_programs/build/bind.exec
-snapshot_kind: text
 ---
 [
-    Ok(
-        Socket {
-            domain: AddressFamilySer(
-                Inet,
-            ),
-            type: SocketType {
-                type: Stream,
-                flags: SockFlag(
-                    0x0,
-                ),
+    Syscall(
+        Syscall {
+            syscall: Socket {
+                domain: Inet,
+                type: SocketType {
+                    type: Stream,
+                    flags: SockFlag(
+                        0x0,
+                    ),
+                },
+                protocol: 0,
             },
-            protocol: 0,
+            cpu_time: 0.0,
+            instruction_pointer: 140204336869691,
         },
     ),
-    Ok(
-        Bind {
-            sockfd: 3,
-            addr: Some(
-                sockaddr_ser(
+    Syscall(
+        Syscall {
+            syscall: Bind {
+                sockfd: 3,
+                addr: Some(
                     sockaddr {
                         sa_family: 2,
                         sa_data: [
@@ -44,26 +45,50 @@ snapshot_kind: text
                         ],
                     },
                 ),
-            ),
-            addrlen: 16,
+                addrlen: 16,
+            },
+            cpu_time: 0.0,
+            instruction_pointer: 140204336868171,
         },
     ),
-    Ok(
-        Listen {
-            sockfd: 3,
-            backlog: 1,
+    Syscall(
+        Syscall {
+            syscall: Listen {
+                sockfd: 3,
+                backlog: 1,
+            },
+            cpu_time: 0.0,
+            instruction_pointer: 140204336868555,
         },
     ),
-    Ok(
-        Accept {
-            sockfd: 3,
-            addr: Some(
-                sockaddr_ser(
+    Syscall(
+        Syscall {
+            syscall: Unknown {
+                id: 57,
+                args: [
+                    1,
+                    16,
+                    140204336868555,
+                    140204337870464,
+                    140204337876896,
+                    16777216,
+                ],
+                return_value: 603064,
+            },
+            cpu_time: 0.0,
+            instruction_pointer: 140204336852893,
+        },
+    ),
+    Syscall(
+        Syscall {
+            syscall: Accept {
+                sockfd: 3,
+                addr: Some(
                     sockaddr {
                         sa_family: 2,
                         sa_data: [
-                            -84,
-                            -10,
+                            -113,
+                            -96,
                             127,
                             0,
                             0,
@@ -79,25 +104,44 @@ snapshot_kind: text
                         ],
                     },
                 ),
-            ),
-            addrlen: Some(
-                16,
-            ),
+                addrlen: Some(
+                    16,
+                ),
+            },
+            cpu_time: 0.0,
+            instruction_pointer: 140204336302814,
         },
     ),
-    Ok(
-        Close {
-            fd: 4,
+    Syscall(
+        Syscall {
+            syscall: Close {
+                fd: 4,
+            },
+            cpu_time: 0.0,
+            instruction_pointer: 140204336302814,
         },
     ),
-    Ok(
-        Close {
-            fd: 3,
+    Syscall(
+        Syscall {
+            syscall: Close {
+                fd: 3,
+            },
+            cpu_time: 0.0,
+            instruction_pointer: 140204336302814,
         },
     ),
-    Ok(
-        ExitGroup {
-            status: 0,
+    Syscall(
+        Syscall {
+            syscall: ExitGroup {
+                status: 0,
+            },
+            cpu_time: 0.0,
+            instruction_pointer: 140204336637768,
         },
+    ),
+    Event(
+        ProcessExit(
+            0,
+        ),
     ),
 ]

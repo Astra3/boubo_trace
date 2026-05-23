@@ -1,30 +1,31 @@
 ---
 source: tests/basic_syscall_trace.rs
-assertion_line: 41
+assertion_line: 38
 expression: called_syscalls
 input_file: test_programs/build/bind.exec
-snapshot_kind: text
 ---
 [
-    Ok(
-        Socket {
-            domain: AddressFamilySer(
-                Inet,
-            ),
-            type: SocketType {
-                type: Stream,
-                flags: SockFlag(
-                    0x0,
-                ),
+    Syscall(
+        Syscall {
+            syscall: Socket {
+                domain: Inet,
+                type: SocketType {
+                    type: Stream,
+                    flags: SockFlag(
+                        0x0,
+                    ),
+                },
+                protocol: 0,
             },
-            protocol: 0,
+            cpu_time: 0.0,
+            instruction_pointer: 140632111837499,
         },
     ),
-    Ok(
-        Bind {
-            sockfd: 3,
-            addr: Some(
-                sockaddr_ser(
+    Syscall(
+        Syscall {
+            syscall: Bind {
+                sockfd: 3,
+                addr: Some(
                     sockaddr {
                         sa_family: 2,
                         sa_data: [
@@ -45,26 +46,50 @@ snapshot_kind: text
                         ],
                     },
                 ),
-            ),
-            addrlen: 16,
+                addrlen: 16,
+            },
+            cpu_time: 0.0,
+            instruction_pointer: 140632111835979,
         },
     ),
-    Ok(
-        Listen {
-            sockfd: 3,
-            backlog: 1,
+    Syscall(
+        Syscall {
+            syscall: Listen {
+                sockfd: 3,
+                backlog: 1,
+            },
+            cpu_time: 0.0,
+            instruction_pointer: 140632111836363,
         },
     ),
-    Ok(
-        Accept {
-            sockfd: 3,
-            addr: Some(
-                sockaddr_ser(
+    Syscall(
+        Syscall {
+            syscall: Unknown {
+                id: 57,
+                args: [
+                    1,
+                    16,
+                    140632111836363,
+                    140632112838272,
+                    140632112844704,
+                    16777216,
+                ],
+                return_value: 603218,
+            },
+            cpu_time: 0.0,
+            instruction_pointer: 140632111820701,
+        },
+    ),
+    Syscall(
+        Syscall {
+            syscall: Accept {
+                sockfd: 3,
+                addr: Some(
                     sockaddr {
                         sa_family: 2,
                         sa_data: [
-                            -78,
-                            -82,
+                            -110,
+                            24,
                             127,
                             0,
                             0,
@@ -80,25 +105,44 @@ snapshot_kind: text
                         ],
                     },
                 ),
-            ),
-            addrlen: Some(
-                16,
-            ),
+                addrlen: Some(
+                    16,
+                ),
+            },
+            cpu_time: 0.0,
+            instruction_pointer: 140632111270622,
         },
     ),
-    Ok(
-        Close {
-            fd: 4,
+    Syscall(
+        Syscall {
+            syscall: Close {
+                fd: 4,
+            },
+            cpu_time: 0.0,
+            instruction_pointer: 140632111270622,
         },
     ),
-    Ok(
-        Close {
-            fd: 3,
+    Syscall(
+        Syscall {
+            syscall: Close {
+                fd: 3,
+            },
+            cpu_time: 0.0,
+            instruction_pointer: 140632111270622,
         },
     ),
-    Ok(
-        ExitGroup {
-            status: 0,
+    Syscall(
+        Syscall {
+            syscall: ExitGroup {
+                status: 0,
+            },
+            cpu_time: 0.0,
+            instruction_pointer: 140632111605576,
         },
+    ),
+    Event(
+        ProcessExit(
+            0,
+        ),
     ),
 ]

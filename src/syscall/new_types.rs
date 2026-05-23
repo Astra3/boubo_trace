@@ -3,10 +3,10 @@ use std::fmt::Debug;
 
 use libc::sockaddr;
 use nix::{
+    errno::Errno,
     fcntl::OFlag,
     sys::{
-        socket::{self, AddressFamily},
-        stat::Mode,
+        signal::Signal, socket::{self, AddressFamily}, stat::Mode
     },
 };
 use rkyv::{
@@ -17,7 +17,7 @@ use rkyv::{
 };
 
 #[derive(thiserror::Error, Debug)]
-pub enum NewTypeError {
+pub enum SyscallNewTypeError {
     #[error("could not parse number {0} to requested enum")]
     CouldNotParseEnum(i32),
     #[error("invalid flags value: {0:#X}")]
@@ -27,17 +27,18 @@ pub enum NewTypeError {
     #[error("invalid conversion: {0:?}")]
     InvalidConversion(#[from] nix::Error),
     #[error(transparent)]
-    AnythingElse(#[from] anyhow::Error)
+    AnythingElse(#[from] anyhow::Error),
 }
 
-impl rancor::Trace for NewTypeError {
+impl rancor::Trace for SyscallNewTypeError {
     fn trace<R>(self, trace: R) -> Self
     where
-        R: core::fmt::Debug + core::fmt::Display + Send + Sync + 'static {
+        R: core::fmt::Debug + core::fmt::Display + Send + Sync + 'static,
+    {
         unimplemented!("help me here: {trace:?}")
     }
 }
-impl rancor::Source for NewTypeError {
+impl rancor::Source for SyscallNewTypeError {
     fn new<T: core::error::Error + Send + Sync + 'static>(source: T) -> Self {
         Self::AnythingElse(source.into())
     }
@@ -95,7 +96,7 @@ impl<S: Fallible> Serialize<S> for SocketType {
     }
 }
 
-impl<D: Fallible<Error = NewTypeError>> Deserialize<SocketType, D> for rend::i32_le {
+impl<D: Fallible<Error = SyscallNewTypeError>> Deserialize<SocketType, D> for rend::i32_le {
     fn deserialize(&self, deserializer: &mut D) -> Result<SocketType, <D as Fallible>::Error> {
         let num: i32 = self.deserialize(deserializer)?;
         Ok(SocketType::try_from(num)?)
@@ -110,9 +111,9 @@ impl TryFrom<i32> for SocketType {
         let sock_type = socket::SockType::try_from(val & !socket::SockFlag::all().bits())?;
 
         Ok(SocketType {
-                    r#type: sock_type,
-                    flags,
-                })
+            r#type: sock_type,
+            flags,
+        })
     }
 }
 
@@ -125,9 +126,37 @@ impl From<&SocketType> for i32 {
 }
 
 #[derive(Debug, Clone)]
-pub struct AddressFamilySer;
+pub(super) struct NewTypeSer;
 
-impl ArchiveWith<AddressFamily> for AddressFamilySer {
+// Mode
+impl ArchiveWith<Mode> for NewTypeSer {
+    type Archived = Archived<u32>;
+
+    type Resolver = Resolver<u32>;
+
+    fn resolve_with(field: &Mode, resolver: Self::Resolver, out: rkyv::Place<Self::Archived>) {
+        field.bits().resolve(resolver, out);
+    }
+}
+
+impl<S: Fallible> SerializeWith<Mode, S> for NewTypeSer {
+    fn serialize_with(
+        field: &Mode,
+        serializer: &mut S,
+    ) -> Result<Self::Resolver, <S as Fallible>::Error> {
+        field.bits().serialize(serializer)
+    }
+}
+
+impl<D: Fallible<Error = SyscallNewTypeError>> DeserializeWith<Archived<u32>, Mode, D> for NewTypeSer {
+    fn deserialize_with(field: &Archived<u32>, _: &mut D) -> Result<Mode, <D as Fallible>::Error> {
+        let num = field.to_native();
+        Mode::from_bits(num).ok_or(SyscallNewTypeError::InvalidFlagU32(num))
+    }
+}
+
+// AddressFamily
+impl ArchiveWith<AddressFamily> for NewTypeSer {
     type Archived = Archived<i32>;
 
     type Resolver = Resolver<i32>;
@@ -141,7 +170,7 @@ impl ArchiveWith<AddressFamily> for AddressFamilySer {
     }
 }
 
-impl<S: Fallible> SerializeWith<AddressFamily, S> for AddressFamilySer {
+impl<S: Fallible> SerializeWith<AddressFamily, S> for NewTypeSer {
     fn serialize_with(
         field: &AddressFamily,
         serializer: &mut S,
@@ -150,19 +179,17 @@ impl<S: Fallible> SerializeWith<AddressFamily, S> for AddressFamilySer {
     }
 }
 
-impl<D: Fallible<Error = NewTypeError>> DeserializeWith<Archived<i32>, AddressFamily, D>
-    for AddressFamilySer
+impl<D: Fallible<Error = SyscallNewTypeError>> DeserializeWith<Archived<i32>, AddressFamily, D>
+    for NewTypeSer
 {
     fn deserialize_with(field: &Archived<i32>, _: &mut D) -> Result<AddressFamily, D::Error> {
         let num = field.to_native();
-        AddressFamily::from_i32(num).ok_or(NewTypeError::CouldNotParseEnum(num))
+        AddressFamily::from_i32(num).ok_or(SyscallNewTypeError::CouldNotParseEnum(num))
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct OFlagSer;
-
-impl ArchiveWith<OFlag> for OFlagSer {
+// OFlag
+impl ArchiveWith<OFlag> for NewTypeSer {
     type Archived = Archived<i32>;
 
     type Resolver = Resolver<i32>;
@@ -172,45 +199,72 @@ impl ArchiveWith<OFlag> for OFlagSer {
     }
 }
 
-impl<S: Fallible + Sized> SerializeWith<OFlag, S> for OFlagSer {
+impl<S: Fallible + Sized> SerializeWith<OFlag, S> for NewTypeSer {
     fn serialize_with(field: &OFlag, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
         field.bits().serialize(serializer)
     }
 }
 
-impl<D: Fallible<Error = NewTypeError>> DeserializeWith<Archived<i32>, OFlag, D> for OFlagSer {
+impl<D: Fallible<Error = SyscallNewTypeError>> DeserializeWith<Archived<i32>, OFlag, D> for NewTypeSer {
     fn deserialize_with(field: &Archived<i32>, _: &mut D) -> Result<OFlag, <D as Fallible>::Error> {
         let num = field.to_native();
-        OFlag::from_bits(field.to_native()).ok_or(NewTypeError::InvalidFlagI32(num))
+        OFlag::from_bits(field.to_native()).ok_or(SyscallNewTypeError::InvalidFlagI32(num))
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ModeSer;
+// Errno
+impl ArchiveWith<Errno> for NewTypeSer {
+    type Archived = Archived<i32>;
 
-impl ArchiveWith<Mode> for ModeSer {
-    type Archived = Archived<u32>;
+    type Resolver = Resolver<i32>;
 
-    type Resolver = Resolver<u32>;
-
-    fn resolve_with(field: &Mode, resolver: Self::Resolver, out: rkyv::Place<Self::Archived>) {
-        field.bits().resolve(resolver, out);
+    fn resolve_with(field: &Errno, (): (), out: rkyv::Place<Self::Archived>) {
+        (*field as i32).resolve((), out);
     }
 }
 
-impl<S: Fallible> SerializeWith<Mode, S> for ModeSer {
+impl<S: Fallible<Error = SyscallNewTypeError>> SerializeWith<Errno, S> for NewTypeSer {
     fn serialize_with(
-        field: &Mode,
+        field: &Errno,
         serializer: &mut S,
     ) -> Result<Self::Resolver, <S as Fallible>::Error> {
-        field.bits().serialize(serializer)
+        (*field as i32).serialize(serializer)
     }
 }
 
-impl<D: Fallible<Error = NewTypeError>> DeserializeWith<Archived<u32>, Mode, D> for ModeSer {
-    fn deserialize_with(field: &Archived<u32>, _: &mut D)
-        -> Result<Mode, <D as Fallible>::Error> {
-        let num = field.to_native();
-        Mode::from_bits(num).ok_or(NewTypeError::InvalidFlagU32(num))
+impl<D: Fallible<Error = SyscallNewTypeError>> DeserializeWith<Archived<i32>, Errno, D> for NewTypeSer {
+    fn deserialize_with(field: &Archived<i32>, _: &mut D) -> Result<Errno, <D as Fallible>::Error> {
+        Ok(Errno::from_raw(field.to_native()))
     }
 }
+
+// Signal
+impl ArchiveWith<Signal> for NewTypeSer {
+    type Archived = Archived<i32>;
+
+    type Resolver = Resolver<i32>;
+
+    fn resolve_with(field: &Signal, (): (), out: rkyv::Place<Self::Archived>) {
+        (*field as i32).resolve((), out);
+    }
+}
+
+impl<S: Fallible<Error = SyscallNewTypeError>> SerializeWith<Signal, S> for NewTypeSer {
+    fn serialize_with(
+        field: &Signal,
+        serializer: &mut S,
+    ) -> Result<Self::Resolver, <S as Fallible>::Error> {
+        (*field as i32).serialize(serializer)
+    }
+}
+
+impl<D: Fallible<Error = SyscallNewTypeError>> DeserializeWith<Archived<i32>, Signal, D> for NewTypeSer {
+    fn deserialize_with(field: &Archived<i32>, _: &mut D) -> Result<Signal, <D as Fallible>::Error> {
+        let num = field.to_native();
+        Signal::try_from(num).or(Err(SyscallNewTypeError::InvalidFlagI32(num)))
+    }
+}
+
+// pub struct ErrnoSer;
+//
+// impl ArchieWith<Errno> for ErrnoSer {}

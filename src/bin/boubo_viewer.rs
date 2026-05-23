@@ -1,7 +1,7 @@
 use std::{fs::File, io::Read, path::PathBuf};
 
 use anyhow::bail;
-use boubo_trace::syscall::{Syscall, new_types::NewTypeError};
+use boubo_trace::syscall::{SyscallInfo, SyscallNewTypeError};
 use clap::Parser;
 
 #[derive(Parser)]
@@ -18,7 +18,7 @@ fn main() -> anyhow::Result<()> {
     let mut file = File::open(args.input_file)?;
     let mut buf = vec![];
     file.read_to_end(&mut buf)?;
-    let syscalls = rkyv::from_bytes::<Vec<Syscall>, NewTypeError>(&buf)?;
+    let syscalls = rkyv::from_bytes::<Vec<SyscallInfo>, SyscallNewTypeError>(&buf)?;
     println!("parsed data: {syscalls:?}");
     Ok(())
 }

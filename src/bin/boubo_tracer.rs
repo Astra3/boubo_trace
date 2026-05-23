@@ -1,11 +1,15 @@
 use std::{
-    fs::{File, canonicalize}, io::Write, path::PathBuf, process::Command
+    fs::{File, canonicalize},
+    io::Write,
+    path::PathBuf,
+    process::Command,
 };
 
 use anyhow::bail;
 use boubo_trace::{
     syscall::{
-        Syscall, SyscallIter, SyscallIterOpts, new_types::{NewTypeError, sockaddr_ser}
+        SyscallNewTypeError, Syscall, SyscallInfo, SyscallIter, TraceData, SyscallIterOpts
+        // new_types::{NewTypeError, sockaddr_ser},
     },
     tracee::Tracee,
 };
@@ -89,13 +93,6 @@ struct App {
     args: Args,
 }
 
-#[derive(Debug, rkyv::Serialize, rkyv::Archive, rkyv::Deserialize)]
-struct IncrementallyBuilding {
-    #[rkyv(with = rkyv::with::Map<sockaddr_ser>)]
-    flags: Option<libc::sockaddr>,
-    number: u8,
-}
-
 impl App {
     fn new(args: Args) -> App {
         App { args }
@@ -119,17 +116,17 @@ impl App {
         for call in SyscallIter::new(Tracee::new(pid), &opts)? {
             match call {
                 Ok(call) => {
-                    info!("Parsed syscall: {call:?}");
+                    info!("Event/Syscall: {call:?}");
                     called_syscalls.push(call);
                 },
-                Err(err) => log::warn!("Error while parsing: {err}"),
+                Err(err) => log::error!("Error while parsing: {err}"),
             }
         }
-        
-        let bytes = rkyv::to_bytes::<NewTypeError>(&called_syscalls)?;
-        
+
+        let bytes = rkyv::to_bytes::<SyscallNewTypeError>(&called_syscalls)?;
+
         println!("before archival: {called_syscalls:?}");
-        let res = rkyv::from_bytes::<Vec<Syscall>, NewTypeError>(&bytes)?;
+        let res = rkyv::from_bytes::<Vec<TraceData>, SyscallNewTypeError>(&bytes)?;
         println!("after recovery: {res:?}");
         assert_eq!(called_syscalls, res);
 
@@ -137,7 +134,7 @@ impl App {
             if path.exists() {
                 bail!("File {} already exists!", path.display())
             }
-            let bytes = rkyv::to_bytes::<NewTypeError>(&called_syscalls)?;
+            let bytes = rkyv::to_bytes::<SyscallNewTypeError>(&called_syscalls)?;
             let mut file = File::create(path)?;
             file.write_all(&bytes)?;
         }

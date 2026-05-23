@@ -3,7 +3,7 @@ mod tests {
     use std::{process::Command, sync::Once};
 
     use boubo_trace::{
-        syscall::{Syscall, SyscallIter, SyscallIterOpts, SyscallParseError},
+        syscall::{SyscallIter, SyscallIterOpts},
         tracee::Tracee,
     };
     use insta::glob;
@@ -34,11 +34,7 @@ mod tests {
             let pid = Pid::from_raw(cmd.id().cast_signed());
 
             let it = SyscallIter::new(Tracee::new(pid), &SyscallIterOpts::default());
-            let called_syscalls: Vec<_> = it
-                .unwrap()
-                .filter(|call| !matches!(call, Ok(Syscall::Unknown { .. })))
-                .take_while(|call| !matches!(call, Err(SyscallParseError::ProcessExit(_))))
-                .collect();
+            let called_syscalls = it.unwrap().collect::<Result<Vec<_>, _>>().unwrap();
             insta::assert_debug_snapshot!(called_syscalls);
             cmd.wait().unwrap();
         });

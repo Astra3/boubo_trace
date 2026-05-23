@@ -1,5 +1,5 @@
 CC = gcc
-CCFLAGS = -g -O2
+CCFLAGS = -g -O2 -lm
 
 OUT_DIR = build/
 

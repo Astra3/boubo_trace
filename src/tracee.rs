@@ -1,13 +1,18 @@
 use std::{
+    cell::LazyCell,
     ffi::c_void,
     fs::File,
-    io::{self, BufRead, BufReader, IoSliceMut},
+    io::{self, BufRead, BufReader, IoSliceMut, Read},
+    mem,
+    os::raw::c_ulonglong,
+    sync::LazyLock, usize,
 };
 
 use libc::{
     PTRACE_EVENT_CLONE, PTRACE_EVENT_EXEC, PTRACE_EVENT_FORK, RAX, c_long, user_regs_struct,
 };
 use log::{debug, error, info, trace, warn};
+use memmap::{Mmap, MmapOptions};
 use nix::{
     errno::Errno,
     sys::{
@@ -18,9 +23,11 @@ use nix::{
     },
     unistd::Pid,
 };
-use x86_64::registers::debug::{BreakpointCondition, BreakpointSize, DebugAddressRegisterNumber, Dr6Flags, Dr7Flags, Dr7Value};
+use x86_64::registers::debug::{
+    BreakpointCondition, BreakpointSize, DebugAddressRegisterNumber, Dr6Flags, Dr7Flags, Dr7Value,
+};
 
-use crate::syscall::{SyscallDiscriminants, SyscallParseError};
+use crate::syscall::{SyscallInfoDiscriminants, TraceError, parse_error::{TraceErrEvt, TraceEvent}};
 
 #[derive(strum::EnumIs)]
 pub enum WaitEvents {
@@ -44,11 +51,13 @@ impl SignalStorage {
     }
 
     pub fn get(&mut self) -> Option<Signal> {
-        let signal = self.signal;
-        self.signal = None;
-        signal
+        self.signal.take()
     }
 }
+
+#[expect(clippy::cast_precision_loss)]
+static CLOCK_TIME: LazyLock<f64> =
+    LazyLock::new(|| unsafe { libc::sysconf(libc::_SC_CLK_TCK) as f64 });
 
 // TODO allow configuring this
 const MAX_BYTES_CSTRING: usize = 2048 * 1024; // 2 MiB
@@ -62,8 +71,10 @@ pub struct Tracee {
 }
 
 impl Tracee {
-    #[must_use] 
+    #[must_use]
     pub fn new(pid: Pid) -> Tracee {
+        // TODO apparently it's not possible to use mmap for /proc files, because their file size is
+        // 0
         Tracee {
             pid,
             signal: SignalStorage::default(),
@@ -71,7 +82,7 @@ impl Tracee {
     }
 
     // TODO add a wait_for_syscall_stop type of method here, apply this for SIGTRAP
-    pub fn wait_for_stop(&mut self) -> Result<WaitEvents, SyscallParseError> {
+    pub fn wait_for_stop(&mut self) -> Result<WaitEvents, TraceErrEvt> {
         match waitpid(self.pid, None) {
             Ok(WaitStatus::PtraceEvent(_, Signal::SIGTRAP, PTRACE_EVENT_EXEC)) => {
                 warn!("stopped on ptrace event exec");
@@ -96,18 +107,18 @@ impl Tracee {
                 Ok(WaitEvents::Stopped(signal))
             }
             Ok(WaitStatus::Exited(_, exit_code)) => {
-                info!("Process exited");
-                Err(SyscallParseError::ProcessExit(exit_code))
+                debug!("Process exited");
+                Err(TraceErrEvt::Event(TraceEvent::ProcessExit(exit_code)))
             }
             Ok(WaitStatus::Signaled(pid, signal, core_dumped)) => {
                 warn!("tracee {pid:?} was signaled {signal:?} and dumped core: {core_dumped}");
-                Err(SyscallParseError::Terminated {
+                Err(TraceErrEvt::Event(TraceEvent::Terminated {
                     signal,
                     core_dumped,
-                })
+                }))
             }
-            Ok(status) => Err(SyscallParseError::UnexpectedWaitStatus(status)),
-            Err(err) => Err(SyscallParseError::WaitPidError(err)),
+            Ok(status) => Err(TraceErrEvt::Error(TraceError::UnexpectedWaitStatus(status))),
+            Err(err) => Err(TraceErrEvt::Error(TraceError::WaitPidError(err))),
         }
     }
 
@@ -123,6 +134,18 @@ impl Tracee {
             &[RemoteIoVec { base, len }],
         )?;
         Ok(data)
+    }
+
+    #[must_use]
+    pub fn get_cpu_time(&self) -> f64 {
+        let stat_file = std::fs::read_to_string(format!("/proc/{}/stat", self.pid)).unwrap();
+        stat_file
+            .split_whitespace()
+            .nth(13)
+            .unwrap()
+            .parse::<f64>()
+            .unwrap()
+            / *CLOCK_TIME
     }
 
     pub fn memcpy_struct<T>(&self, base: u64) -> ErrnoResult<Option<T>>
@@ -177,7 +200,7 @@ impl Tracee {
         self.memcpy_until(base, |num| *num == 0)
     }
 
-    pub fn read_rax(&self) -> Result<i64, SyscallParseError> {
+    pub fn read_rax(&self) -> Result<i64, TraceError> {
         Ok(ptrace::read_user(self.pid, (RAX * 8) as *mut c_void)?)
     }
 
@@ -207,17 +230,25 @@ impl Tracee {
 
     pub fn parse_return(
         &mut self,
-        syscall: SyscallDiscriminants,
-    ) -> Result<i64, SyscallParseError> {
-        debug!("parsing return...");
+        syscall: SyscallInfoDiscriminants,
+    ) -> Result<i64, TraceErrEvt> {
+        debug!("Parsing syscall return...");
         self.syscall()?;
         self.wait_for_stop()?;
         let syscall_info: PtraceSyscallInfo = self.syscall_info()?.into();
-        let Some(PtraceSyscallInfoData::Exit { return_value, is_error }) = syscall_info.data else {
-            return Err(SyscallParseError::InvalidSyscallInfo(syscall_info))
+        let Some(PtraceSyscallInfoData::Exit {
+            return_value,
+            is_error,
+        }) = syscall_info.data
+        else {
+            return Err(TraceErrEvt::Error(TraceError::InvalidSyscallInfo(syscall_info)));
         };
         if is_error {
-            return Err(SyscallParseError::SyscallError { syscall, error: parse_syscall_error(return_value) })
+            return Err(TraceErrEvt::Event(TraceEvent::SyscallError {
+                syscall,
+                error: parse_syscall_error(return_value),
+                rip: syscall_info.instruction_pointer,
+            }));
         }
         Ok(return_value)
     }
@@ -230,33 +261,52 @@ impl Tracee {
         ptrace::cont(self.pid, self.signal.get())
     }
 
-    pub fn translate_address(&self, requested_addr: usize) -> Result<Option<usize>, io::Error> {
-        let pid_text = self.pid.to_string();
-        let file = File::open("/proc/".to_string() + &pid_text + "/task/" + &pid_text + "/maps")?;
+    fn translate_address(&self, mut func: impl FnMut((usize, usize), usize) -> Option<usize>) -> Result<Option<usize>, io::Error> {
+        let file = File::open(format!("/proc/{pid}/task/{pid}/maps", pid = self.pid))?;
         let reader = BufReader::new(file);
         for line in reader.lines() {
             let line = line?;
             let mut it = line.split_whitespace();
-            let section = it.next().unwrap();
+            let virt_addresses = it.next().unwrap();
 
-            let (start, stop) = section.split_once('-').unwrap();
+            let (start, stop) = virt_addresses.split_once('-').unwrap();
             let start = usize::from_str_radix(start, 16).unwrap();
             let stop = usize::from_str_radix(stop, 16).unwrap();
 
             // permissions
             it.next();
-            let offset = usize::from_str_radix(it.next().unwrap(), 16).unwrap();
-            if requested_addr < offset {
-                continue;
-            }
+            let elf_offset = usize::from_str_radix(it.next().unwrap(), 16).unwrap();
 
-            let difference = stop - start;
-            if requested_addr <= offset + difference {
-                return Ok(Some(start + requested_addr - offset));
+            let func_res = func((start, stop), elf_offset);
+            if func_res.is_some() {
+                return Ok(func_res)
             }
         }
-
         Ok(None)
+
+    }
+
+    pub fn translate_address_to_virtual(&self, requested_addr: usize) -> Result<Option<usize>, io::Error> {
+        self.translate_address(|(start, stop), elf_offset| {
+            if requested_addr < elf_offset { return None; }
+
+            let difference = stop - start;
+            if requested_addr <= elf_offset + difference {
+                return Some(start + requested_addr - elf_offset)
+            }
+            None
+        })
+    }
+
+    pub fn translate_address_from_virtual(&self, requested_addr: usize) -> Result<Option<usize>, io::Error> {
+        self.translate_address(|(start, stop), elf_offset| {
+            let range = start..=stop;
+            if range.contains(&requested_addr) {
+                Some(requested_addr - start + elf_offset)
+            } else {
+                None
+            }
+        })
     }
 
     // this isn't gonna be compatible outside of x86, just like many other code around here
@@ -264,10 +314,12 @@ impl Tracee {
         // break_address gets written to Dr0
         // let break_register = Dr0::write(break_address.try_into().unwrap());
         let bits = self.read_user(debugreg_offset(7))?;
-        let dr7 = Dr7Value::from_bits(bits.cast_unsigned());
-        trace!("dr7 value: {dr7:?}");
-        let mut dr7 = Dr7Value::from(Dr7Flags::LOCAL_BREAKPOINT_0_ENABLE);
-        dr7.set_condition(DebugAddressRegisterNumber::Dr0, BreakpointCondition::InstructionExecution);
+        let mut dr7 = Dr7Value::from_bits(bits.cast_unsigned()).unwrap();
+        dr7.set_flags(Dr7Flags::LOCAL_BREAKPOINT_0_ENABLE, true);
+        dr7.set_condition(
+            DebugAddressRegisterNumber::Dr0,
+            BreakpointCondition::InstructionExecution,
+        );
         dr7.set_size(DebugAddressRegisterNumber::Dr0, BreakpointSize::Length1B);
 
         self.write_user(debugreg_offset(0), break_address as i64)?;
@@ -275,13 +327,18 @@ impl Tracee {
         Ok(())
     }
 
-    pub fn check_break(&self) -> ErrnoResult<()> {
+    pub fn check_and_remove_break(&self) -> ErrnoResult<()> {
         let dr6 = self.read_user(debugreg_offset(6))?;
         let dr6 = Dr6Flags::from_bits_truncate(dr6.cast_unsigned());
-        trace!("DR6 flags: {dr6:?}");
         if !dr6.contains(Dr6Flags::TRAP0) {
             error!("Breakpoint was not triggered when it was expected to trigger!");
         }
+
+        // disable breakpoint
+        let bits = self.read_user(debugreg_offset(7))?;
+        let mut dr7 = Dr7Value::from_bits(bits.cast_unsigned()).unwrap();
+        dr7.set_flags(Dr7Flags::LOCAL_BREAKPOINT_0_ENABLE, false);
+        self.write_user(debugreg_offset(7), dr7.bits().cast_signed())?;
         Ok(())
     }
 
@@ -289,26 +346,26 @@ impl Tracee {
         ptrace::syscall_info(self.pid)
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn get_pid_string(&self) -> String {
         self.pid.to_string()
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PtraceSyscallInfo {
     pub flags: u16,
     pub arch: u32,
     pub instruction_pointer: u64,
     pub stack_pointer: u64,
-    pub data: Option<PtraceSyscallInfoData>
+    pub data: Option<PtraceSyscallInfoData>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PtraceSyscallInfoData {
     Entry {
         syscall_number: u64,
-        args: [u64; 6]
+        args: [u64; 6],
     },
     Exit {
         return_value: i64,
@@ -318,7 +375,7 @@ pub enum PtraceSyscallInfoData {
         syscall_number: u64,
         args: [u64; 6],
         ret_data: u32,
-    }
+    },
 }
 
 impl From<libc::ptrace_syscall_info> for PtraceSyscallInfo {
@@ -326,18 +383,28 @@ impl From<libc::ptrace_syscall_info> for PtraceSyscallInfo {
         let data = match value.op {
             libc::PTRACE_SYSCALL_INFO_ENTRY => {
                 let data = unsafe { value.u.entry };
-                Some(PtraceSyscallInfoData::Entry { syscall_number: data.nr, args: data.args })
-            },
+                Some(PtraceSyscallInfoData::Entry {
+                    syscall_number: data.nr,
+                    args: data.args,
+                })
+            }
             libc::PTRACE_SYSCALL_INFO_EXIT => {
                 let data = unsafe { value.u.exit };
-                Some(PtraceSyscallInfoData::Exit { return_value: data.sval, is_error: data.is_error != 0 })
-            },
+                Some(PtraceSyscallInfoData::Exit {
+                    return_value: data.sval,
+                    is_error: data.is_error != 0,
+                })
+            }
             libc::PTRACE_SYSCALL_INFO_SECCOMP => {
                 let data = unsafe { value.u.seccomp };
-                Some(PtraceSyscallInfoData::Seccomp { syscall_number: data.nr, args: data.args, ret_data: data.ret_data })
-            },
+                Some(PtraceSyscallInfoData::Seccomp {
+                    syscall_number: data.nr,
+                    args: data.args,
+                    ret_data: data.ret_data,
+                })
+            }
             libc::PTRACE_SYSCALL_INFO_NONE => None,
-            _ => panic!("{} is invalid value for ptrace_syscall_info.op", value.op)
+            _ => panic!("{} is invalid value for ptrace_syscall_info.op", value.op),
         };
         PtraceSyscallInfo {
             flags: value.flags,
@@ -350,16 +417,14 @@ impl From<libc::ptrace_syscall_info> for PtraceSyscallInfo {
 }
 
 const fn debugreg_offset(reg_pos: usize) -> usize {
-    assert!(reg_pos < 8, "There are only 8 debug registers counting from DR0 to DR7.");
-    let user = std::mem::MaybeUninit::<libc::user>::uninit();
-    let ptr = user.as_ptr();
-
-    let ptr_start = ptr.cast::<u8>();
-    let ptr_end = unsafe { std::ptr::addr_of!((*ptr).u_debugreg[reg_pos]).cast::<u8>() };
-    unsafe { ptr_end.offset_from(ptr_start).cast_unsigned() }
+    assert!(
+        reg_pos < 8,
+        "There are only 8 debug registers counting from DR0 to DR7."
+    );
+    mem::offset_of!(libc::user, u_debugreg) + reg_pos * mem::size_of::<c_ulonglong>()
 }
 
-#[must_use] 
+#[must_use]
 pub fn parse_syscall_error(return_value: i64) -> Errno {
     Errno::from_raw(-return_value as i32)
 }
