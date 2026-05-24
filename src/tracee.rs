@@ -1,18 +1,16 @@
 use std::{
-    cell::LazyCell,
     ffi::c_void,
     fs::File,
-    io::{self, BufRead, BufReader, IoSliceMut, Read},
+    io::{self, BufRead, BufReader, IoSliceMut},
     mem,
     os::raw::c_ulonglong,
-    sync::LazyLock, usize,
+    sync::LazyLock,
 };
 
 use libc::{
     PTRACE_EVENT_CLONE, PTRACE_EVENT_EXEC, PTRACE_EVENT_FORK, RAX, c_long, user_regs_struct,
 };
-use log::{debug, error, info, trace, warn};
-use memmap::{Mmap, MmapOptions};
+use log::{debug, error, trace, warn};
 use nix::{
     errno::Errno,
     sys::{
@@ -248,6 +246,7 @@ impl Tracee {
                 syscall,
                 error: parse_syscall_error(return_value),
                 rip: syscall_info.instruction_pointer,
+                cpu_time: self.get_cpu_time()
             }));
         }
         Ok(return_value)

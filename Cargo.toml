@@ -8,20 +8,18 @@ license = "GPL-3.0-or-later"
 default-run = "boubo_tracer"
 
 [dependencies]
-anyhow = "1.0.102"
-clap = { version = "4.6.1", features = ["derive"] }
-derive_builder = "0.20.2"
+ahash = { version = "0.8.12", optional = true }
+anyhow = { version = "1.0.102", optional = true }
+clap = { version = "4.6.1", features = ["derive"], optional = true }
 elf = "0.8.0"
 env_logger = "0.11.10"
 libc = { version = "0.2.186", features = ["extra_traits"] }
 log = "0.4"
-memmap = "0.7.0"
 nix = { version = "0.31.3", features = ["ptrace", "uio", "fs", "sched", "socket", "net"] }
 rkyv = "0.8.16"
-serde_json = "1.0.149"
 spawn-ptrace = "0.1.2"
 strum = { version = "0.28.0", features = ["derive"]}
-thiserror = "2.0.18"
+thiserror = { version = "2.0.18", optional = true }
 x86_64 = { version = "0.15.4", default-features = false, features = ["instructions"] }
 
 [dev-dependencies]
@@ -40,9 +38,18 @@ allow_attributes = "warn"
 
 [[bin]]
 name = "boubo_tracer"
+required-features = ["tracer"]
 
 [[bin]]
 name = "boubo_viewer"
+required-features = ["viewer"]
 
 [profile.dev.package]
 insta.opt-level = 3
+
+[features]
+default = ["viewer", "tracer"]
+viewer = ["binary", "dep:ahash"]
+tracer = ["binary"]
+binary = ["dep:clap", "dep:thiserror", "dep:anyhow"]
+

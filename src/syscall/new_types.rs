@@ -35,7 +35,8 @@ impl rancor::Trace for SyscallNewTypeError {
     where
         R: core::fmt::Debug + core::fmt::Display + Send + Sync + 'static,
     {
-        unimplemented!("help me here: {trace:?}")
+        eprintln!("rkyv trace: {trace}");
+        self
     }
 }
 impl rancor::Source for SyscallNewTypeError {

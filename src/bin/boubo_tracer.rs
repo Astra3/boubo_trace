@@ -8,7 +8,7 @@ use std::{
 use anyhow::bail;
 use boubo_trace::{
     syscall::{
-        SyscallNewTypeError, Syscall, SyscallInfo, SyscallIter, TraceData, SyscallIterOpts
+        SyscallNewTypeError, SyscallIter, TraceData, SyscallIterOpts
         // new_types::{NewTypeError, sockaddr_ser},
     },
     tracee::Tracee,
@@ -125,9 +125,7 @@ impl App {
 
         let bytes = rkyv::to_bytes::<SyscallNewTypeError>(&called_syscalls)?;
 
-        println!("before archival: {called_syscalls:?}");
         let res = rkyv::from_bytes::<Vec<TraceData>, SyscallNewTypeError>(&bytes)?;
-        println!("after recovery: {res:?}");
         assert_eq!(called_syscalls, res);
 
         if let Some(path) = &self.args.output {

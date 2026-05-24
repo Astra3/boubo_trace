@@ -1,9 +1,7 @@
 /.vscode/
-
 /target
 *.o
-
 thesis.pdf
-
+*.bin
 .venv/
 

@@ -1,9 +1,8 @@
 use core::str;
-use std::{io, time::Duration};
 
 use elf::{ElfBytes, endian::AnyEndian};
 use libc::{sockaddr, socklen_t};
-use log::{debug, info, trace, warn};
+use log::{debug, trace, warn};
 use new_types::{NewTypeSer, SocketType, sockaddr_ser};
 use nix::{
     errno::Errno,
@@ -52,7 +51,8 @@ pub enum SyscallInfo {
     },
     Write {
         fd: i32,
-        buf: Vec<u8>,
+        to_write: Vec<u8>,
+        written_count: usize,
     },
     Close {
         fd: i32,
@@ -90,6 +90,7 @@ pub enum SyscallInfo {
         flags: OFlag,
         #[rkyv(with = NewTypeSer)]
         mode: Mode,
+        opened_fd: i32,
     },
     Execve {
         pathname: Vec<u8>,
@@ -153,10 +154,11 @@ impl SyscallInfo {
             }
             libc::SYS_write => {
                 let text = tracee.memcpy(args[1], args[2] as usize)?;
-                tracee.parse_return(SyscallDisc::Write)?;
+                let written_count = tracee.parse_return(SyscallDisc::Write)? as usize;
                 Ok(SyscallInfo::Write {
                     fd: args[0] as libc::c_int,
-                    buf: text,
+                    to_write: text,
+                    written_count,
                 })
             }
             libc::SYS_close => {
@@ -252,6 +254,7 @@ impl SyscallInfo {
                         syscall: SyscallDisc::Execve,
                         error: parse_syscall_error(return_value),
                         rip: syscall_info.instruction_pointer,
+                        cpu_time: tracee.get_cpu_time()
                     }))
                 }
             }
@@ -260,12 +263,13 @@ impl SyscallInfo {
             }),
             libc::SYS_openat => {
                 let pathname = tracee.strcpy(args[1])?;
-                tracee.parse_return(SyscallDisc::Openat)?;
+                let opened_fd = tracee.parse_return(SyscallDisc::Openat)? as libc::c_int;
                 Ok(SyscallInfo::Openat {
                     dirfd: args[0] as libc::c_int,
                     pathname,
                     flags: fcntl::OFlag::from_bits(args[2] as libc::c_int).unwrap(),
                     mode: stat::Mode::from_bits(args[3] as libc::mode_t).unwrap(),
+                    opened_fd,
                 })
             }
             libc::SYS_unlink => {
@@ -290,10 +294,10 @@ impl SyscallInfo {
 
 #[derive(PartialEq, Debug, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct Syscall {
-    syscall: SyscallInfo,
-    cpu_time: f64,
+    pub syscall: SyscallInfo,
+    pub cpu_time: f64,
     // TODO this is the ELF address, but it should not be linked to 
-    virt_addr_offset: usize,
+    pub virt_addr_offset: usize,
 }
 
 impl Syscall {

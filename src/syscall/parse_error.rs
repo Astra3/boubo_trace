@@ -21,7 +21,7 @@ pub enum TraceError {
 }
 
 #[derive(
-    Error, Debug, PartialEq, Eq, Clone, Copy, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize,
+    Error, Debug, PartialEq, Clone, Copy, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize,
 )]
 pub enum TraceEvent {
     #[error("tracee terminated by OS with signal {signal:?}")]
@@ -37,11 +37,12 @@ pub enum TraceEvent {
         syscall: SyscallDisc,
         #[rkyv(with = NewTypeSer)]
         error: Errno,
+        cpu_time: f64,
         rip: u64,
     },
 }
 
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq)]
 pub enum TraceErrEvt {
     #[error(transparent)]
     Error(#[from] TraceError),
